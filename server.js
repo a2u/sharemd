@@ -59,12 +59,13 @@ function pageHtml(title, bodyContent, pathSegments) {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${escapeHtml(title)} — sharemd</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/styles/github.min.css" media="(prefers-color-scheme: light)">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+  <link rel="stylesheet" id="hljs-light" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/styles/github.min.css">
+  <link rel="stylesheet" id="hljs-dark" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/styles/github-dark.min.css">
   <style>${CSS}</style>
+  <script>${THEME_JS}</script>
 </head>
 <body>
-  <header class="header"><nav class="header-inner">${headerLinks}</nav></header>
+  <header class="header"><nav class="header-inner">${headerLinks}<button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme"></button></nav></header>
   <div class="container">
     ${bodyContent}
   </div>
@@ -159,7 +160,7 @@ ___| |__   __ _ _ __ ___ _ __ ___   __| |
 }
 
 const CSS = `
-:root {
+:root, [data-theme="light"] {
   --bg: #ffffff;
   --fg: #1f2328;
   --muted: #656d76;
@@ -169,6 +170,7 @@ const CSS = `
   --card-bg: #ffffff;
   --card-hover: #f6f8fa;
   --header-bg: rgba(255,255,255,0.85);
+  --toggle-icon: "☀️";
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -181,8 +183,22 @@ const CSS = `
     --card-bg: #161b22;
     --card-hover: #1c2129;
     --header-bg: rgba(13,17,23,0.85);
+    --toggle-icon: "🌙";
   }
 }
+[data-theme="dark"] {
+  --bg: #0d1117;
+  --fg: #e6edf3;
+  --muted: #8b949e;
+  --border: #30363d;
+  --accent: #58a6ff;
+  --code-bg: #161b22;
+  --card-bg: #161b22;
+  --card-hover: #1c2129;
+  --header-bg: rgba(13,17,23,0.85);
+  --toggle-icon: "🌙";
+}
+[data-theme="light"] { --toggle-icon: "☀️"; }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
@@ -208,6 +224,13 @@ body {
 .header a:hover { text-decoration: underline; }
 .header .sep { color: var(--muted); margin: 0 0.4rem; }
 .header .current { color: var(--fg); }
+.theme-toggle {
+  margin-left: auto;
+  background: none; border: none; cursor: pointer;
+  font-size: 1rem; padding: 0.2rem;
+  line-height: 1;
+}
+.theme-toggle::after { content: var(--toggle-icon); }
 .container {
   max-width: 860px;
   margin: 0 auto;
@@ -275,6 +298,37 @@ body {
 }
 .footer a { color: var(--muted); text-decoration: none; }
 .footer a:hover { color: var(--accent); text-decoration: underline; }
+`;
+
+const THEME_JS = `
+(function(){
+  var s = localStorage.getItem('theme');
+  if (s) document.documentElement.setAttribute('data-theme', s);
+})();
+function toggleTheme() {
+  var d = document.documentElement;
+  var current = d.getAttribute('data-theme');
+  if (!current) {
+    current = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  var next = current === 'dark' ? 'light' : 'dark';
+  d.setAttribute('data-theme', next);
+  localStorage.setItem('theme', next);
+  // switch highlight.js stylesheet
+  var light = document.getElementById('hljs-light');
+  var dark = document.getElementById('hljs-dark');
+  if (light) light.disabled = (next === 'dark');
+  if (dark) dark.disabled = (next === 'light');
+}
+// apply hljs on load
+(function(){
+  var s = localStorage.getItem('theme');
+  if (!s) s = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  var light = document.getElementById('hljs-light');
+  var dark = document.getElementById('hljs-dark');
+  if (light) light.disabled = (s === 'dark');
+  if (dark) dark.disabled = (s === 'light');
+})();
 `;
 
 function escapeHtml(s) {
