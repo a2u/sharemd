@@ -1,10 +1,6 @@
-<p align="center">
-  <img src="logo.png" alt="sharemd" width="500">
-</p>
+![sharemd](logo.png)
 
-<p align="center">
 Lightweight markdown sharing service. Upload `.md` files via API or CLI, get a clean URL with beautifully rendered content. Supports single files and directory bundles with hierarchy. Dark/light theme, syntax highlighting, token auth. Self-hosted, no database — just Node.js and the filesystem.
-</p>
 
 ## Quick Start
 
