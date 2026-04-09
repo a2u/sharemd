@@ -59,6 +59,7 @@ function pageHtml(title, bodyContent, pathSegments) {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${escapeHtml(title)} — sharemd</title>
+  <link rel="icon" href="/favicon.ico">
   <link rel="stylesheet" id="hljs-light" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/styles/github.min.css">
   <link rel="stylesheet" id="hljs-dark" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/styles/github-dark.min.css">
   <style>${CSS}</style>
@@ -69,7 +70,7 @@ function pageHtml(title, bodyContent, pathSegments) {
   <div class="container">
     ${bodyContent}
   </div>
-  <footer class="footer">shared via <a href="https://github.com/a2u/sharemd"><strong>sharemd</strong></a></footer>
+  <footer class="footer">shared via <a href="https://github.com/a2u/sharemd"><strong>sharemd</strong></a> <img src="/icon-sm.png" alt="" width="14" height="14" style="vertical-align:-2px"></footer>
 </body>
 </html>`;
 }
@@ -332,6 +333,7 @@ function send404(res, message) {
 // --- App ---
 
 const app = express();
+app.use(express.static(path.join(__dirname, "public")));
 app.use(express.json({ limit: "10mb" }));
 
 // Upload single file
