@@ -33,12 +33,13 @@ command -v jq >/dev/null || die "jq is required (brew install jq)"
 api_call() {
   local endpoint="$1" payload="$2"
   local raw
-  raw=$(curl -s -w "\n%{http_code}" -X POST "${SHAREMD_URL}${endpoint}" \
+  raw=$(curl -s --max-time 10 -w "\n%{http_code}" -X POST "${SHAREMD_URL}${endpoint}" \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer ${SHAREMD_TOKEN}" \
-    -d "$payload")
+    -d "$payload") || die "Cannot connect to ${SHAREMD_URL}"
   RESP_CODE="${raw##*$'\n'}"
   RESP_BODY="${raw%$'\n'*}"
+  [[ "$RESP_CODE" != "000" ]] || die "Server not responding at ${SHAREMD_URL}"
 }
 
 # --- Upload single file ---
