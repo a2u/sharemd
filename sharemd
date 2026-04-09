@@ -1,0 +1,150 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# --- Configuration ---
+SHAREMD_URL="${SHAREMD_URL:-http://localhost:3737}"
+SHAREMD_TOKEN="${SHAREMD_TOKEN:-shmd_tk_9f4a2b7e1c8d3056}"
+
+# --- Helpers ---
+
+usage() {
+  cat <<EOF
+Usage: sharemd <file.md|directory> [-f]
+
+Share markdown files and get a public URL.
+
+  sharemd article.md        Upload a single .md file
+  sharemd docs/             Upload all .md files from a directory
+  sharemd article.md -f     Overwrite if already exists
+
+Environment variables:
+  SHAREMD_URL    Server URL (default: http://localhost:3737)
+  SHAREMD_TOKEN  Auth token
+EOF
+  exit 1
+}
+
+die() { echo "error: $*" >&2; exit 1; }
+
+command -v curl >/dev/null || die "curl is required"
+command -v jq >/dev/null || die "jq is required (brew install jq)"
+
+# Make an API call. Sets RESP_BODY and RESP_CODE.
+api_call() {
+  local endpoint="$1" payload="$2"
+  local raw
+  raw=$(curl -s -w "\n%{http_code}" -X POST "${SHAREMD_URL}${endpoint}" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer ${SHAREMD_TOKEN}" \
+    -d "$payload")
+  RESP_CODE="${raw##*$'\n'}"
+  RESP_BODY="${raw%$'\n'*}"
+}
+
+# --- Upload single file ---
+
+upload_file() {
+  local filepath="$1"
+  local force="$2"
+  local filename
+  filename=$(basename "$filepath")
+
+  [[ -f "$filepath" ]] || die "File not found: $filepath"
+  [[ "$filename" == *.md ]] || die "Not a markdown file: $filepath"
+
+  local payload
+  if [[ "$force" == "true" ]]; then
+    payload=$(jq -Rs --arg fn "$filename" '{content: ., filename: $fn, overwrite: true}' < "$filepath")
+  else
+    payload=$(jq -Rs --arg fn "$filename" '{content: ., filename: $fn}' < "$filepath")
+  fi
+
+  api_call "/api/upload" "$payload"
+
+  if [[ "$RESP_CODE" == "409" ]]; then
+    local existing_url
+    existing_url=$(echo "$RESP_BODY" | jq -r '.url')
+    echo "Already exists: $existing_url" >&2
+    read -rp "Overwrite? [y/N] " answer
+    if [[ "$answer" =~ ^[Yy]$ ]]; then
+      upload_file "$filepath" "true"
+    fi
+    return
+  fi
+
+  local error
+  error=$(echo "$RESP_BODY" | jq -r '.error // empty')
+  [[ -z "$error" ]] || die "Upload failed: $error"
+
+  echo "$RESP_BODY" | jq -r '.url'
+}
+
+# --- Upload directory ---
+
+upload_directory() {
+  local dirpath="${1%/}"
+  local force="$2"
+  [[ -d "$dirpath" ]] || die "Directory not found: $dirpath"
+
+  # Collect .md files
+  local files=()
+  while IFS= read -r -d '' file; do
+    files+=("$file")
+  done < <(find "$dirpath" -name "*.md" -type f -print0 | sort -z)
+
+  [[ ${#files[@]} -gt 0 ]] || die "No .md files found in $dirpath"
+
+  # Build JSON files array — preserve directory name in paths
+  local dirname
+  dirname=$(basename "$dirpath")
+  local json_files="[]"
+  for file in "${files[@]}"; do
+    local relpath="${dirname}/${file#$dirpath/}"
+    local file_json
+    file_json=$(jq -Rs --arg p "$relpath" '{path: $p, content: .}' < "$file")
+    json_files=$(echo "$json_files" | jq --argjson f "$file_json" '. + [$f]')
+  done
+
+  local payload
+  if [[ "$force" == "true" ]]; then
+    payload=$(echo "$json_files" | jq '{files: ., overwrite: true}')
+  else
+    payload=$(echo "$json_files" | jq '{files: .}')
+  fi
+
+  api_call "/api/upload-bundle" "$payload"
+
+  if [[ "$RESP_CODE" == "409" ]]; then
+    local existing
+    existing=$(echo "$RESP_BODY" | jq -r '.files | join(", ")')
+    echo "Already exist: $existing" >&2
+    read -rp "Overwrite? [y/N] " answer
+    if [[ "$answer" =~ ^[Yy]$ ]]; then
+      upload_directory "$dirpath" "true"
+    fi
+    return
+  fi
+
+  local error
+  error=$(echo "$RESP_BODY" | jq -r '.error // empty')
+  [[ -z "$error" ]] || die "Upload failed: $error"
+
+  echo "${#files[@]} file(s) uploaded"
+  echo "$RESP_BODY" | jq -r '.url'
+}
+
+# --- Main ---
+
+[[ $# -ge 1 ]] || usage
+
+target="$1"
+force="false"
+[[ "${2:-}" == "-f" ]] && force="true"
+
+if [[ -f "$target" ]]; then
+  upload_file "$target" "$force"
+elif [[ -d "$target" ]]; then
+  upload_directory "$target" "$force"
+else
+  die "Not a file or directory: $target"
+fi

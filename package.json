@@ -1,0 +1,17 @@
+{
+  "name": "sharemd",
+  "version": "1.0.0",
+  "description": "Markdown file sharing service",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test 'tests/*.test.js'"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "markdown-it": "^14.1.0",
+    "markdown-it-anchor": "^9.2.0",
+    "highlight.js": "^11.10.0"
+  }
+}
