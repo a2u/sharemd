@@ -47,7 +47,7 @@ Upload a single markdown file.
 
 ## POST /api/upload-bundle
 
-Upload multiple files (typically a directory).
+Upload multiple files (typically a directory). The CLI sends paths with the directory name preserved (e.g. `docs/guide.md`).
 
 **Request:**
 
@@ -153,7 +153,8 @@ These routes are accessed by anyone with the URL.
 
 | Route | Description |
 |-------|-------------|
-| `GET /:userId/:file.md` | Renders markdown as styled HTML |
+| `GET /` | Landing page |
+| `GET /:userId/:file.md` | Renders markdown as styled HTML with theme toggle |
 | `GET /:userId/:dir/` | Lists `.md` files in the directory |
 | `GET /:userId` | Returns 404 (no public user listing) |
 

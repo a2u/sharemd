@@ -52,6 +52,16 @@ Already exists: http://localhost:3737/1/article.md
 Overwrite? [y/N]
 ```
 
+### Connection errors
+
+If the server is unreachable, the CLI exits with a clear error:
+
+```
+error: Cannot connect to http://localhost:3737
+```
+
+Timeout is 10 seconds.
+
 ## Configuration
 
 | Variable | Default | Description |
@@ -72,4 +82,4 @@ sharemd notes.md
 | Code | Meaning |
 |------|---------|
 | 0 | Success |
-| 1 | Error (file not found, upload failed, etc.) |
+| 1 | Error (file not found, upload failed, server unreachable) |
