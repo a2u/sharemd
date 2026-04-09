@@ -74,89 +74,10 @@ function pageHtml(title, bodyContent, pathSegments) {
 </html>`;
 }
 
+const LANDING_TEMPLATE = fs.readFileSync(path.join(__dirname, "index.html"), "utf-8");
+
 function landingHtml() {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${escapeHtml(SITE_DOMAIN)}</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      background: #0a0a0a;
-      color: #aaa;
-      font-family: "Courier New", Courier, monospace;
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .terminal {
-      max-width: 640px;
-      padding: 2rem;
-    }
-    .ascii {
-      color: #fff;
-      font-size: 0.7rem;
-      line-height: 1.2;
-      white-space: pre;
-      margin-bottom: 2rem;
-    }
-    @media (max-width: 480px) {
-      .ascii { font-size: 0.45rem; }
-    }
-    .desc {
-      font-size: 0.9rem;
-      line-height: 1.7;
-      margin-bottom: 1.5rem;
-    }
-    .desc strong { color: #fff; }
-    .prompt {
-      color: #666;
-      font-size: 0.8rem;
-      line-height: 1.8;
-    }
-    .prompt span { color: #888; }
-    a { color: #888; }
-    a:hover { color: #fff; }
-    .blink {
-      display: inline-block;
-      width: 0.55em;
-      height: 1em;
-      background: #aaa;
-      vertical-align: text-bottom;
-      animation: blink 1s step-end infinite;
-    }
-    @keyframes blink {
-      50% { opacity: 0; }
-    }
-  </style>
-</head>
-<body>
-  <div class="terminal">
-    <div class="ascii"> _                                  _
-| |                                | |
-___| |__   __ _ _ __ ___ _ __ ___   __| |
-/ __| '_ \\ / _\` | '__/ _ \\ '_ \` _ \\ / _\` |
-\\__ \\ | | | (_| | | |  __/ | | | | | (_| |
-|___/_| |_|\\__,_|_|  \\___|_| |_| |_|\\__,_|</div>
-    <div class="desc">
-      <strong>Markdown file sharing.</strong> Upload <strong>.md</strong> files,
-      get a clean URL with rendered content. Syntax highlighting,
-      dark/light theme, directory support. No database &mdash; just
-      files on disk.
-    </div>
-    <div class="prompt">
-      <span>$</span> sharemd article.md<br>
-      <span>&rarr;</span> ${escapeHtml(SITE_DOMAIN)}/1/article.md<br><br>
-      <span>$</span> sharemd docs/<br>
-      <span>&rarr;</span> ${escapeHtml(SITE_DOMAIN)}/1/docs<br><br>
-      <a href="https://github.com/a2u/sharemd">github.com/a2u/sharemd</a><span class="blink"></span>
-    </div>
-  </div>
-</body>
-</html>`;
+  return LANDING_TEMPLATE.replace(/\{\{SITE_DOMAIN\}\}/g, escapeHtml(SITE_DOMAIN));
 }
 
 const CSS = `
