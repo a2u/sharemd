@@ -44,6 +44,27 @@
     .prompt span { color: #888; }
     a { color: #888; }
     a:hover { color: #fff; }
+    .nav {
+      margin-top: 1.5rem;
+      padding-top: 1rem;
+      border-top: 1px solid #222;
+      font-size: 0.8rem;
+      display: flex;
+      align-items: center;
+      gap: 1.2rem;
+    }
+    .nav a { color: #666; }
+    .nav a:hover { color: #fff; }
+    .nav .btn {
+      margin-left: auto;
+      color: #0a0a0a;
+      background: #aaa;
+      padding: 0.3rem 0.9rem;
+      text-decoration: none;
+      font-family: inherit;
+      font-size: 0.8rem;
+    }
+    .nav .btn:hover { background: #fff; }
     .blink {
       display: inline-block;
       width: 0.55em;
@@ -77,6 +98,11 @@
       <span>$</span> sharemd docs/<br>
       <span>&rarr;</span> {{SITE_DOMAIN}}/docs<br><br>
       <a href="https://github.com/a2u/sharemd">github.com/a2u/sharemd</a><span class="blink"></span>
+    </div>
+    <div class="nav">
+      <a href="/ai-skill">ai-skill</a>
+      <a href="https://github.com/a2u/sharemd">github</a>
+      <a href="/login" class="btn">login</a>
     </div>
   </div>
 </body>
