@@ -15,11 +15,11 @@ Server runs at `http://localhost:3737`.
 
 ```bash
 # Single file
-./sharemd article.md
+bin/sharemd article.md
 # → http://localhost:3737/1/article.md
 
 # Directory
-./sharemd docs/
+bin/sharemd docs/
 # → http://localhost:3737/1/docs
 ```
 
@@ -63,9 +63,9 @@ See [docs/api.md](docs/api.md) for the full API reference.
 Requires `curl` and `jq`.
 
 ```bash
-./sharemd file.md           # upload single file
-./sharemd directory/        # upload directory
-./sharemd file.md -f        # force overwrite
+bin/sharemd file.md           # upload single file
+bin/sharemd directory/        # upload directory
+bin/sharemd file.md -f        # force overwrite
 ```
 
 See [docs/cli.md](docs/cli.md) for full CLI reference.

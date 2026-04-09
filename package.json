@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Markdown file sharing service",
   "main": "server.js",
+  "bin": {
+    "sharemd": "./bin/sharemd"
+  },
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",

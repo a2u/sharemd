@@ -14,7 +14,7 @@ Use this skill to share markdown content as a beautifully rendered web page. Ret
 
 ```bash
 # From a file on disk
-./sharemd path/to/file.md
+bin/sharemd path/to/file.md
 
 # Programmatically via API
 curl -s -X POST "${SHAREMD_URL:-http://localhost:3737}/api/upload" \
@@ -26,7 +26,7 @@ curl -s -X POST "${SHAREMD_URL:-http://localhost:3737}/api/upload" \
 ### Share a directory of files
 
 ```bash
-./sharemd path/to/directory/
+bin/sharemd path/to/directory/
 ```
 
 ### List uploaded files

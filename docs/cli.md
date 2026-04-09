@@ -2,14 +2,14 @@
 
 ## Installation
 
-The `sharemd` script is a standalone bash file. Copy it to your PATH or run it directly:
+The `sharemd` script is a standalone bash file in `bin/`. Copy it to your PATH or run it directly:
 
 ```bash
 # From the repo
-./sharemd file.md
+bin/sharemd file.md
 
 # Or symlink to PATH
-ln -s $(pwd)/sharemd /usr/local/bin/sharemd
+ln -s $(pwd)/bin/sharemd /usr/local/bin/sharemd
 ```
 
 **Dependencies:** `curl`, `jq`

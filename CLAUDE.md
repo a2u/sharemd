@@ -11,9 +11,9 @@ sharemd — a markdown file sharing service. Upload `.md` files via API or CLI, 
 - `npm start` — run the server (port 3737)
 - `npm run dev` — run with `--watch` for auto-reload
 - `npm test` — run all tests
-- `./sharemd file.md` — upload a single file via CLI
-- `./sharemd directory/` — upload all `.md` files from a directory (preserves dir name)
-- `./sharemd file.md -f` — force overwrite
+- `bin/sharemd file.md` — upload a single file via CLI
+- `bin/sharemd directory/` — upload all `.md` files from a directory (preserves dir name)
+- `bin/sharemd file.md -f` — force overwrite
 
 ## Architecture
 
