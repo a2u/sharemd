@@ -41,13 +41,12 @@ md.use(anchor, { permalink: false });
 
 // --- HTML templates ---
 
-// pathSegments: [{label, href}] — each part of the path breadcrumb
 function pageHtml(title, bodyContent, pathSegments) {
   let headerLinks = `<a href="/">${escapeHtml(SITE_DOMAIN)}</a>`;
   if (pathSegments) {
     for (const seg of pathSegments) {
       if (seg.href) {
-        headerLinks += ` <span class="sep">/</span> <a href="${seg.href}">${escapeHtml(seg.label)}</a>`;
+        headerLinks += ` <span class="sep">/</span> <a href="${escapeHtml(seg.href)}">${escapeHtml(seg.label)}</a>`;
       } else {
         headerLinks += ` <span class="sep">/</span> <span class="current">${escapeHtml(seg.label)}</span>`;
       }
@@ -118,7 +117,7 @@ body {
   max-width: 860px; margin: 0 auto;
   padding: 0.6rem 1.5rem;
   font-size: 0.875rem; font-weight: 500;
-  display: flex; align-items: center; gap: 0;
+  display: flex; align-items: center;
 }
 .header a { color: var(--accent); text-decoration: none; }
 .header a:hover { text-decoration: underline; }
@@ -250,6 +249,16 @@ function auth(req, res, next) {
     return res.status(401).json({ error: "Invalid or missing token" });
   }
   next();
+}
+
+function buildSegments(userId, filePath) {
+  const parts = filePath.split("/");
+  const segments = [];
+  for (let i = 0; i < parts.length - 1; i++) {
+    segments.push({ label: parts[i], href: `/${userId}/${parts.slice(0, i + 1).join("/")}` });
+  }
+  segments.push({ label: parts[parts.length - 1] });
+  return segments;
 }
 
 function send404(res, message) {
@@ -438,14 +447,7 @@ app.get("/:userId/:filePath(*)", (req, res) => {
       listHtml += `</ul>`;
     }
 
-    // Path segments for header: domain / dir
-    const dirParts = filePath.split("/");
-    const segments = [];
-    for (let i = 0; i < dirParts.length - 1; i++) {
-      segments.push({ label: dirParts[i], href: `/${userId}/${dirParts.slice(0, i + 1).join("/")}` });
-    }
-    segments.push({ label: dirParts[dirParts.length - 1] }); // current — no link
-    return res.send(pageHtml(dirName, listHtml, segments));
+    return res.send(pageHtml(dirName, listHtml, buildSegments(userId, filePath)));
   }
 
   // It's a file — render markdown
@@ -458,21 +460,13 @@ app.get("/:userId/:filePath(*)", (req, res) => {
     return send404(res);
   }
 
-  // Path segments for header
-  const parts = filePath.split("/");
-  const segments = [];
-  for (let i = 0; i < parts.length - 1; i++) {
-    segments.push({ label: parts[i], href: `/${userId}/${parts.slice(0, i + 1).join("/")}` });
-  }
-  segments.push({ label: parts[parts.length - 1] }); // current file — no link
-
   const rendered = md.render(content);
 
   res.send(
     pageHtml(
       path.basename(filePath),
       `<article class="markdown-body">${rendered}</article>`,
-      segments
+      buildSegments(userId, filePath)
     )
   );
 });
