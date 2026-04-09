@@ -81,7 +81,7 @@ function landingHtml() {
 }
 
 const CSS = `
-:root, [data-theme="light"] {
+:root {
   --bg: #ffffff;
   --fg: #1f2328;
   --muted: #656d76;
@@ -94,7 +94,7 @@ const CSS = `
   --toggle-icon: "☀️";
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme]) {
     --bg: #0d1117;
     --fg: #e6edf3;
     --muted: #8b949e;
