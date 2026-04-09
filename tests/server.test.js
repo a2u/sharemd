@@ -286,7 +286,7 @@ describe("public viewing", () => {
     const res = await req("GET", "/1/nav/doc.md", null, false);
     assert.equal(res.status, 200);
     assert.ok(res.html.includes("Doc"));
-    assert.ok(res.html.includes("← nav"));
+    assert.ok(res.html.includes("/1/nav"));  // header links to parent dir
   });
 
   it("returns 404 for non-.md file path", async () => {

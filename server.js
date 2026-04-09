@@ -16,6 +16,7 @@ const BASE_URL = (process.env.BASE_URL || `http://localhost:${PORT}`).replace(
   ""
 );
 const DATA_DIR = path.resolve(process.env.DATA_DIR || "./data");
+const SITE_DOMAIN = process.env.SITE_DOMAIN || "sharemd";
 
 fs.mkdirSync(path.join(DATA_DIR, String(USER_ID)), { recursive: true });
 
@@ -39,10 +40,18 @@ md.use(anchor, { permalink: false });
 
 // --- HTML templates ---
 
-function pageHtml(title, bodyContent, breadcrumb) {
-  const breadcrumbHtml = breadcrumb
-    ? `<nav class="breadcrumb">${breadcrumb}</nav>`
-    : "";
+// pathSegments: [{label, href}] — each part of the path breadcrumb
+function pageHtml(title, bodyContent, pathSegments) {
+  let headerLinks = `<a href="/">${escapeHtml(SITE_DOMAIN)}</a>`;
+  if (pathSegments) {
+    for (const seg of pathSegments) {
+      if (seg.href) {
+        headerLinks += ` <span class="sep">/</span> <a href="${seg.href}">${escapeHtml(seg.label)}</a>`;
+      } else {
+        headerLinks += ` <span class="sep">/</span> <span class="current">${escapeHtml(seg.label)}</span>`;
+      }
+    }
+  }
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -55,8 +64,8 @@ function pageHtml(title, bodyContent, breadcrumb) {
   <style>${CSS}</style>
 </head>
 <body>
+  <header class="header"><nav class="header-inner">${headerLinks}</nav></header>
   <div class="container">
-    ${breadcrumbHtml}
     ${bodyContent}
   </div>
   <footer class="footer">shared via <a href="https://github.com/a2u/sharemd"><strong>sharemd</strong></a></footer>
@@ -74,6 +83,7 @@ const CSS = `
   --code-bg: #f6f8fa;
   --card-bg: #ffffff;
   --card-hover: #f6f8fa;
+  --header-bg: rgba(255,255,255,0.85);
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -85,6 +95,7 @@ const CSS = `
     --code-bg: #161b22;
     --card-bg: #161b22;
     --card-hover: #1c2129;
+    --header-bg: rgba(13,17,23,0.85);
   }
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -97,6 +108,21 @@ body {
   display: flex;
   flex-direction: column;
 }
+.header {
+  position: sticky; top: 0; z-index: 10;
+  background: var(--header-bg); border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(8px);
+}
+.header-inner {
+  max-width: 860px; margin: 0 auto;
+  padding: 0.6rem 1.5rem;
+  font-size: 0.875rem; font-weight: 500;
+  display: flex; align-items: center; gap: 0;
+}
+.header a { color: var(--accent); text-decoration: none; }
+.header a:hover { text-decoration: underline; }
+.header .sep { color: var(--muted); margin: 0 0.4rem; }
+.header .current { color: var(--fg); }
 .container {
   max-width: 860px;
   margin: 0 auto;
@@ -104,13 +130,6 @@ body {
   flex: 1;
   width: 100%;
 }
-.breadcrumb {
-  margin-bottom: 1.5rem;
-  font-size: 0.875rem;
-  color: var(--muted);
-}
-.breadcrumb a { color: var(--accent); text-decoration: none; }
-.breadcrumb a:hover { text-decoration: underline; }
 
 /* Markdown body */
 .markdown-body h1, .markdown-body h2, .markdown-body h3,
@@ -418,7 +437,14 @@ app.get("/:userId/:filePath(*)", (req, res) => {
       listHtml += `</ul>`;
     }
 
-    return res.send(pageHtml(dirName, listHtml));
+    // Path segments for header: domain / dir
+    const dirParts = filePath.split("/");
+    const segments = [];
+    for (let i = 0; i < dirParts.length - 1; i++) {
+      segments.push({ label: dirParts[i], href: `/${userId}/${dirParts.slice(0, i + 1).join("/")}` });
+    }
+    segments.push({ label: dirParts[dirParts.length - 1] }); // current — no link
+    return res.send(pageHtml(dirName, listHtml, segments));
   }
 
   // It's a file — render markdown
@@ -431,14 +457,13 @@ app.get("/:userId/:filePath(*)", (req, res) => {
     return send404(res);
   }
 
-  // Build breadcrumb: link to parent directory if nested
+  // Path segments for header
   const parts = filePath.split("/");
-  let breadcrumb = null;
-  if (parts.length > 1) {
-    const parentPath = parts.slice(0, -1).join("/");
-    const parentName = parts[parts.length - 2];
-    breadcrumb = `<a href="/${userId}/${parentPath}">← ${escapeHtml(parentName)}</a> / ${escapeHtml(parts[parts.length - 1])}`;
+  const segments = [];
+  for (let i = 0; i < parts.length - 1; i++) {
+    segments.push({ label: parts[i], href: `/${userId}/${parts.slice(0, i + 1).join("/")}` });
   }
+  segments.push({ label: parts[parts.length - 1] }); // current file — no link
 
   const rendered = md.render(content);
 
@@ -446,7 +471,7 @@ app.get("/:userId/:filePath(*)", (req, res) => {
     pageHtml(
       path.basename(filePath),
       `<article class="markdown-body">${rendered}</article>`,
-      breadcrumb
+      segments
     )
   );
 });
