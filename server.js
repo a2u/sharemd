@@ -70,7 +70,7 @@ function pageHtml(title, bodyContent, pathSegments) {
   <div class="container">
     ${bodyContent}
   </div>
-  <footer class="footer">shared via <a href="https://github.com/a2u/sharemd"><strong>sharemd</strong></a> <img src="/icon-sm.png" alt="" width="14" height="14" style="vertical-align:-2px"></footer>
+  <footer class="footer">shared via <a href="https://github.com/a2u/sharemd"><strong>sharemd</strong></a> ❤️</footer>
 </body>
 </html>`;
 }
