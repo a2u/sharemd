@@ -11,7 +11,7 @@ const anchor = require("markdown-it-anchor");
 
 const PORT = process.env.PORT || 3737;
 const TOKEN = process.env.SHAREMD_TOKEN || "shmd_tk_9f4a2b7e1c8d3056";
-const USER_ID = 1; // hardcoded for now
+const SUPERADMIN_ID = 1;
 const BASE_URL = (process.env.BASE_URL || `http://localhost:${PORT}`).replace(
   /\/$/,
   ""
@@ -19,7 +19,7 @@ const BASE_URL = (process.env.BASE_URL || `http://localhost:${PORT}`).replace(
 const DATA_DIR = path.resolve(process.env.DATA_DIR || "./data");
 const SITE_DOMAIN = process.env.SITE_DOMAIN || "sharemd";
 
-fs.mkdirSync(path.join(DATA_DIR, String(USER_ID)), { recursive: true });
+fs.mkdirSync(path.join(DATA_DIR, String(SUPERADMIN_ID)), { recursive: true });
 
 // --- Markdown renderer ---
 
@@ -41,7 +41,7 @@ md.use(anchor, { permalink: false });
 
 // --- HTML templates ---
 
-function pageHtml(title, bodyContent, pathSegments) {
+function pageHtml(title, bodyContent, pathSegments, rawUrl) {
   let headerLinks = `<a href="/">${escapeHtml(SITE_DOMAIN)}</a>`;
   if (pathSegments) {
     for (const seg of pathSegments) {
@@ -52,6 +52,10 @@ function pageHtml(title, bodyContent, pathSegments) {
       }
     }
   }
+
+  const rawLink = rawUrl
+    ? `<a href="${escapeHtml(rawUrl)}" class="raw-link">raw</a>`
+    : "";
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -66,7 +70,7 @@ function pageHtml(title, bodyContent, pathSegments) {
   <script>${THEME_JS}</script>
 </head>
 <body>
-  <header class="header"><nav class="header-inner">${headerLinks}<button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme"></button></nav></header>
+  <header class="header"><nav class="header-inner">${headerLinks}<span class="header-right">${rawLink}<button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme"></button></span></nav></header>
   <div class="container">
     ${bodyContent}
   </div>
@@ -146,8 +150,20 @@ body {
 .header a:hover { text-decoration: underline; }
 .header .sep { color: var(--muted); margin: 0 0.4rem; }
 .header .current { color: var(--fg); }
-.theme-toggle {
+.header-right {
   margin-left: auto;
+  display: flex; align-items: center; gap: 0.75rem;
+}
+.raw-link {
+  font-size: 0.75rem;
+  color: var(--muted) !important;
+  text-decoration: none !important;
+  border: 1px solid var(--border);
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+}
+.raw-link:hover { color: var(--fg) !important; border-color: var(--muted); }
+.theme-toggle {
   background: none; border: none; cursor: pointer;
   font-size: 1rem; padding: 0.2rem;
   line-height: 1;
@@ -236,13 +252,11 @@ function toggleTheme() {
   var next = current === 'dark' ? 'light' : 'dark';
   d.setAttribute('data-theme', next);
   localStorage.setItem('theme', next);
-  // switch highlight.js stylesheet
   var light = document.getElementById('hljs-light');
   var dark = document.getElementById('hljs-dark');
   if (light) light.disabled = (next === 'dark');
   if (dark) dark.disabled = (next === 'light');
 }
-// apply hljs on load
 (function(){
   var s = localStorage.getItem('theme');
   if (!s) s = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -297,6 +311,27 @@ function rmRecursive(target) {
   fs.rmSync(target, { recursive: true, force: true });
 }
 
+// --- URL helpers ---
+
+function urlPrefix(userId) {
+  return Number(userId) === SUPERADMIN_ID ? "" : `/${userId}`;
+}
+
+function publicUrl(userId, filePath) {
+  return `${BASE_URL}${urlPrefix(userId)}/${filePath}`;
+}
+
+function buildSegments(userId, filePath) {
+  const parts = filePath.split("/");
+  const prefix = urlPrefix(userId);
+  const segments = [];
+  for (let i = 0; i < parts.length - 1; i++) {
+    segments.push({ label: parts[i], href: `${prefix}/${parts.slice(0, i + 1).join("/")}` });
+  }
+  segments.push({ label: parts[parts.length - 1] });
+  return segments;
+}
+
 // --- Auth middleware ---
 
 function auth(req, res, next) {
@@ -312,22 +347,96 @@ function auth(req, res, next) {
   next();
 }
 
-function buildSegments(userId, filePath) {
-  const parts = filePath.split("/");
-  const segments = [];
-  for (let i = 0; i < parts.length - 1; i++) {
-    segments.push({ label: parts[i], href: `/${userId}/${parts.slice(0, i + 1).join("/")}` });
-  }
-  segments.push({ label: parts[parts.length - 1] });
-  return segments;
-}
-
 function send404(res, message) {
   return res
     .status(404)
     .send(
       pageHtml("Not Found", `<h1>404</h1><p>${message || "Page not found."}</p>`)
     );
+}
+
+// --- Shared route handler ---
+
+function handlePath(req, res, userId, filePath) {
+  filePath = filePath.replace(/\/+$/, "");
+  if (!filePath) return send404(res);
+
+  const fp = resolveFilePath(userId, filePath);
+  if (!fp) return send404(res);
+
+  let stat;
+  try {
+    stat = fs.statSync(fp);
+  } catch {
+    return send404(res);
+  }
+
+  const prefix = urlPrefix(userId);
+
+  // Directory listing
+  if (stat.isDirectory()) {
+    const files = listMdFiles(fp, fp);
+    if (files.length === 0) return send404(res);
+
+    const dirName = path.basename(filePath);
+    const grouped = {};
+    for (const f of files) {
+      const d = path.dirname(f);
+      if (!grouped[d]) grouped[d] = [];
+      grouped[d].push(f);
+    }
+
+    const dirs = Object.keys(grouped).sort((a, b) => {
+      if (a === ".") return -1;
+      if (b === ".") return 1;
+      return a.localeCompare(b);
+    });
+
+    let listHtml = `<h1>${escapeHtml(dirName)}</h1><p style="color:var(--muted);margin-bottom:1.5rem">${files.length} file${files.length !== 1 ? "s" : ""}</p>`;
+
+    for (const dir of dirs) {
+      if (dirs.length > 1 || dir !== ".") {
+        listHtml += `<div class="dir-heading">${dir === "." ? "Root" : escapeHtml(dir)}</div>`;
+      }
+      listHtml += `<ul class="file-list">`;
+      for (const f of grouped[dir]) {
+        const basename = path.basename(f);
+        const dirPfx = dir !== "." ? `${dir}/` : "";
+        listHtml += `<li><a href="${prefix}/${filePath}/${f}"><span class="icon">📄</span><span><span class="dir-prefix">${escapeHtml(dirPfx)}</span><span class="path">${escapeHtml(basename)}</span></span></a></li>`;
+      }
+      listHtml += `</ul>`;
+    }
+
+    return res.send(pageHtml(dirName, listHtml, buildSegments(userId, filePath)));
+  }
+
+  // File — must be .md
+  if (!filePath.endsWith(".md")) return send404(res);
+
+  let content;
+  try {
+    content = fs.readFileSync(fp, "utf-8");
+  } catch {
+    return send404(res);
+  }
+
+  // Raw mode
+  if (req.query.raw !== undefined) {
+    res.type("text/plain; charset=utf-8").send(content);
+    return;
+  }
+
+  const rendered = md.render(content);
+  const rawUrl = `${prefix}/${filePath}?raw`;
+
+  res.send(
+    pageHtml(
+      path.basename(filePath),
+      `<article class="markdown-body">${rendered}</article>`,
+      buildSegments(userId, filePath),
+      rawUrl
+    )
+  );
 }
 
 // --- App ---
@@ -342,20 +451,20 @@ app.post("/api/upload", auth, (req, res) => {
   if (!content) return res.status(400).json({ error: "content is required" });
 
   const name = filename || "document.md";
-  const fp = resolveFilePath(USER_ID, name);
+  const fp = resolveFilePath(SUPERADMIN_ID, name);
   if (!fp) return res.status(400).json({ error: "invalid filename" });
 
   if (fs.existsSync(fp) && !overwrite) {
     return res.status(409).json({
       exists: true,
-      url: `${BASE_URL}/${USER_ID}/${name}`,
+      url: publicUrl(SUPERADMIN_ID, name),
     });
   }
 
   fs.mkdirSync(path.dirname(fp), { recursive: true });
   fs.writeFileSync(fp, content);
 
-  res.json({ url: `${BASE_URL}/${USER_ID}/${name}` });
+  res.json({ url: publicUrl(SUPERADMIN_ID, name) });
 });
 
 // Upload bundle (directory)
@@ -365,7 +474,6 @@ app.post("/api/upload-bundle", auth, (req, res) => {
     return res.status(400).json({ error: "files array is required" });
   }
 
-  // Derive the common directory prefix for the response URL
   let dirPrefix = null;
   for (const f of files) {
     if (!f.path || !f.content) {
@@ -381,11 +489,10 @@ app.post("/api/upload-bundle", auth, (req, res) => {
     else if (dirPrefix !== topDir) dirPrefix = null;
   }
 
-  // Check for existing files
   if (!overwrite) {
     const existing = files
       .filter((f) => {
-        const fp = resolveFilePath(USER_ID, f.path);
+        const fp = resolveFilePath(SUPERADMIN_ID, f.path);
         return fp && fs.existsSync(fp);
       })
       .map((f) => f.path);
@@ -394,28 +501,27 @@ app.post("/api/upload-bundle", auth, (req, res) => {
       return res.status(409).json({
         exists: true,
         files: existing,
-        url: `${BASE_URL}/${USER_ID}/${dirPrefix || ""}`,
+        url: publicUrl(SUPERADMIN_ID, dirPrefix || ""),
       });
     }
   }
 
-  // Write all files
   for (const f of files) {
-    const fp = resolveFilePath(USER_ID, f.path);
+    const fp = resolveFilePath(SUPERADMIN_ID, f.path);
     if (!fp) continue;
     fs.mkdirSync(path.dirname(fp), { recursive: true });
     fs.writeFileSync(fp, f.content);
   }
 
   const url = dirPrefix
-    ? `${BASE_URL}/${USER_ID}/${dirPrefix}`
-    : `${BASE_URL}/${USER_ID}`;
+    ? publicUrl(SUPERADMIN_ID, dirPrefix)
+    : `${BASE_URL}${urlPrefix(SUPERADMIN_ID)}`;
   res.json({ url });
 });
 
 // List files (API, requires auth)
 app.get("/api/files", auth, (req, res) => {
-  const dir = userDir(USER_ID);
+  const dir = userDir(SUPERADMIN_ID);
   const files = listMdFiles(dir, dir);
   res.json({ files });
 });
@@ -430,7 +536,7 @@ app.delete("/api/delete", auth, (req, res) => {
     return res.status(400).json({ error: "invalid path" });
   }
 
-  const fp = resolveFilePath(USER_ID, targetPath);
+  const fp = resolveFilePath(SUPERADMIN_ID, targetPath);
   if (!fp) return res.status(400).json({ error: "invalid path" });
 
   if (!fs.existsSync(fp)) {
@@ -455,87 +561,29 @@ app.get("/", (req, res) => {
   res.send(landingHtml());
 });
 
-// Catch /:userId — no public listing
-app.get("/:userId", (req, res) => {
+// Non-superadmin user routes (future: other users with /:userId/...)
+app.get("/:userId", (req, res, next) => {
+  if (!/^\d+$/.test(req.params.userId)) return next();
   return send404(res);
 });
 
-// View file or directory listing
-app.get("/:userId/:filePath(*)", (req, res) => {
+app.get("/:userId/:filePath(*)", (req, res, next) => {
   const userId = req.params.userId;
-  if (!/^\d+$/.test(userId)) return send404(res);
+  if (!/^\d+$/.test(userId)) return next();
 
-  const filePath = req.params.filePath.replace(/\/+$/, ""); // strip trailing slash
+  // Superadmin: redirect /1/path → /path
+  if (Number(userId) === SUPERADMIN_ID) {
+    return res.redirect(`/${req.params.filePath}`);
+  }
+
+  handlePath(req, res, userId, req.params.filePath);
+});
+
+// Superadmin catch-all: /path → user 1
+app.get("/:filePath(*)", (req, res) => {
+  const filePath = req.params.filePath;
   if (!filePath) return send404(res);
-
-  const fp = resolveFilePath(userId, filePath);
-  if (!fp) return send404(res);
-
-  // Check if it's a directory — render listing
-  let stat;
-  try {
-    stat = fs.statSync(fp);
-  } catch {
-    return send404(res);
-  }
-
-  if (stat.isDirectory()) {
-    const files = listMdFiles(fp, fp);
-    if (files.length === 0) return send404(res);
-
-    const dirName = path.basename(filePath);
-
-    // Group by subdirectory
-    const grouped = {};
-    for (const f of files) {
-      const d = path.dirname(f);
-      if (!grouped[d]) grouped[d] = [];
-      grouped[d].push(f);
-    }
-
-    const dirs = Object.keys(grouped).sort((a, b) => {
-      if (a === ".") return -1;
-      if (b === ".") return 1;
-      return a.localeCompare(b);
-    });
-
-    let listHtml = `<h1>${escapeHtml(dirName)}</h1><p style="color:var(--muted);margin-bottom:1.5rem">${files.length} file${files.length !== 1 ? "s" : ""}</p>`;
-
-    for (const dir of dirs) {
-      if (dirs.length > 1 || dir !== ".") {
-        listHtml += `<div class="dir-heading">${dir === "." ? "Root" : escapeHtml(dir)}</div>`;
-      }
-      listHtml += `<ul class="file-list">`;
-      for (const f of grouped[dir]) {
-        const basename = path.basename(f);
-        const dirPfx = dir !== "." ? `${dir}/` : "";
-        listHtml += `<li><a href="/${userId}/${filePath}/${f}"><span class="icon">📄</span><span><span class="dir-prefix">${escapeHtml(dirPfx)}</span><span class="path">${escapeHtml(basename)}</span></span></a></li>`;
-      }
-      listHtml += `</ul>`;
-    }
-
-    return res.send(pageHtml(dirName, listHtml, buildSegments(userId, filePath)));
-  }
-
-  // It's a file — render markdown
-  if (!filePath.endsWith(".md")) return send404(res);
-
-  let content;
-  try {
-    content = fs.readFileSync(fp, "utf-8");
-  } catch {
-    return send404(res);
-  }
-
-  const rendered = md.render(content);
-
-  res.send(
-    pageHtml(
-      path.basename(filePath),
-      `<article class="markdown-body">${rendered}</article>`,
-      buildSegments(userId, filePath)
-    )
-  );
+  handlePath(req, res, String(SUPERADMIN_ID), filePath);
 });
 
 // --- Export for testing ---
@@ -550,4 +598,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { createServer, DATA_DIR, USER_ID };
+module.exports = { createServer, DATA_DIR, SUPERADMIN_ID };

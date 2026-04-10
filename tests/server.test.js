@@ -13,7 +13,7 @@ process.env.PORT = TEST_PORT;
 process.env.DATA_DIR = TEST_DATA;
 process.env.BASE_URL = `http://localhost:${TEST_PORT}`;
 
-const { createServer, USER_ID } = require("../server");
+const { createServer, SUPERADMIN_ID } = require("../server");
 
 let server;
 const BASE = `http://localhost:${TEST_PORT}`;
@@ -56,7 +56,7 @@ function req(method, urlPath, body, token) {
 
 function cleanData() {
   fs.rmSync(TEST_DATA, { recursive: true, force: true });
-  fs.mkdirSync(path.join(TEST_DATA, String(USER_ID)), { recursive: true });
+  fs.mkdirSync(path.join(TEST_DATA, String(SUPERADMIN_ID)), { recursive: true });
 }
 
 before((_, done) => {
@@ -97,12 +97,12 @@ describe("auth", () => {
 // --- Upload single file ---
 
 describe("POST /api/upload", () => {
-  it("uploads a file and returns url", async () => {
+  it("uploads a file and returns url without user id prefix", async () => {
     const res = await req("POST", "/api/upload", { content: "# Test", filename: "test.md" });
     assert.equal(res.status, 200);
-    assert.ok(res.body.url.endsWith("/1/test.md"));
+    assert.ok(res.body.url.endsWith("/test.md"));
+    assert.ok(!res.body.url.includes("/1/")); // superadmin: no /1/ in url
 
-    // Verify on disk
     const fp = path.join(TEST_DATA, "1", "test.md");
     assert.ok(fs.existsSync(fp));
     assert.equal(fs.readFileSync(fp, "utf-8"), "# Test");
@@ -146,7 +146,7 @@ describe("POST /api/upload-bundle", () => {
       ],
     });
     assert.equal(res.status, 200);
-    assert.ok(res.body.url.includes("/1/docs"));
+    assert.ok(res.body.url.includes("/docs"));
 
     assert.ok(fs.existsSync(path.join(TEST_DATA, "1", "docs", "a.md")));
     assert.ok(fs.existsSync(path.join(TEST_DATA, "1", "docs", "b.md")));
@@ -251,51 +251,76 @@ describe("DELETE /api/delete", () => {
 
 // --- Public routes ---
 
-describe("public viewing", () => {
-  it("GET /:userId returns 404 (no public listing)", async () => {
-    const res = await req("GET", "/1", null, false);
-    assert.equal(res.status, 404);
+describe("superadmin URLs", () => {
+  it("/1/path redirects to /path", async () => {
+    await req("POST", "/api/upload", { content: "# Hi", filename: "redir.md" });
+    const res = await req("GET", "/1/redir.md", null, false);
+    assert.equal(res.status, 302);
+    assert.equal(res.headers.location, "/redir.md");
   });
 
-  it("renders a single .md file", async () => {
-    await req("POST", "/api/upload", { content: "# Hello World", filename: "hello.md" });
-    const res = await req("GET", "/1/hello.md", null, false);
+  it("renders file at /path directly", async () => {
+    await req("POST", "/api/upload", { content: "# Direct", filename: "direct.md" });
+    const res = await req("GET", "/direct.md", null, false);
     assert.equal(res.status, 200);
-    assert.ok(res.html.includes("Hello World"));
+    assert.ok(res.html.includes("Direct"));
     assert.ok(res.html.includes("markdown-body"));
   });
 
-  it("renders directory listing", async () => {
+  it("renders directory listing at /dir", async () => {
     await req("POST", "/api/upload-bundle", {
       files: [
         { path: "mydir/a.md", content: "# A" },
         { path: "mydir/b.md", content: "# B" },
       ],
     });
-    const res = await req("GET", "/1/mydir", null, false);
+    const res = await req("GET", "/mydir", null, false);
     assert.equal(res.status, 200);
     assert.ok(res.html.includes("a.md"));
     assert.ok(res.html.includes("b.md"));
-    assert.ok(res.html.includes("mydir"));
   });
 
-  it("renders file inside directory with breadcrumb", async () => {
+  it("breadcrumb links have no /1/ prefix", async () => {
     await req("POST", "/api/upload-bundle", {
       files: [{ path: "nav/doc.md", content: "# Doc" }],
     });
-    const res = await req("GET", "/1/nav/doc.md", null, false);
+    const res = await req("GET", "/nav/doc.md", null, false);
     assert.equal(res.status, 200);
-    assert.ok(res.html.includes("Doc"));
-    assert.ok(res.html.includes("/1/nav"));  // header links to parent dir
+    assert.ok(res.html.includes('href="/nav"')); // not /1/nav
+    assert.ok(!res.html.includes("/1/nav"));
+  });
+});
+
+describe("raw mode", () => {
+  it("returns raw markdown with ?raw", async () => {
+    await req("POST", "/api/upload", { content: "# Raw Test\n\nHello", filename: "raw.md" });
+    const res = await req("GET", "/raw.md?raw", null, false);
+    assert.equal(res.status, 200);
+    assert.ok(res.headers["content-type"].includes("text/plain"));
+    assert.equal(res.html, "# Raw Test\n\nHello");
+  });
+
+  it("shows raw link on rendered page", async () => {
+    await req("POST", "/api/upload", { content: "# Hi", filename: "link.md" });
+    const res = await req("GET", "/link.md", null, false);
+    assert.ok(res.html.includes("?raw"));
+    assert.ok(res.html.includes("raw-link"));
+  });
+});
+
+describe("other public routes", () => {
+  it("GET /1 returns 404", async () => {
+    const res = await req("GET", "/1", null, false);
+    assert.equal(res.status, 404);
   });
 
   it("returns 404 for non-.md file path", async () => {
-    const res = await req("GET", "/1/something.txt", null, false);
+    const res = await req("GET", "/something.txt", null, false);
     assert.equal(res.status, 404);
   });
 
   it("returns 404 for non-existent file", async () => {
-    const res = await req("GET", "/1/nope.md", null, false);
+    const res = await req("GET", "/nope.md", null, false);
     assert.equal(res.status, 404);
   });
 });
