@@ -57,6 +57,10 @@ function req(method, urlPath, body, token) {
 function cleanData() {
   fs.rmSync(TEST_DATA, { recursive: true, force: true });
   fs.mkdirSync(path.join(TEST_DATA, String(SUPERADMIN_ID)), { recursive: true });
+  // Write users.json so auth works
+  fs.writeFileSync(path.join(TEST_DATA, "users.json"), JSON.stringify([
+    { id: SUPERADMIN_ID, email: "test@test.com", token: TOKEN, registeredAt: "2026-04-09T00:00:00.000Z", storageLimitMb: 20 }
+  ]));
 }
 
 before((_, done) => {

@@ -49,16 +49,33 @@ All config via `.env` file, loaded by `dotenv` at startup:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PORT` | `3737` | Server port |
-| `SHAREMD_TOKEN` | — | Bearer token for API auth |
 | `BASE_URL` | `http://localhost:3737` | Used in generated URLs |
 | `DATA_DIR` | `./data` | File storage location |
 | `SITE_DOMAIN` | `sharemd` | Domain shown in header and landing page |
 
+## User Management
+
+Users are stored in `data/users.json`:
+
+```json
+[
+  {
+    "id": 1,
+    "email": "user@example.com",
+    "token": "shmd_tk_...",
+    "registeredAt": "2026-04-09T00:00:00.000Z",
+    "storageLimitMb": 20
+  }
+]
+```
+
+The file is re-read on every authenticated request — no server restart needed when adding or removing users.
+
 ## Authentication
 
-Single bearer token checked via `crypto.timingSafeEqual` to prevent timing attacks. Token is configured via `SHAREMD_TOKEN` env var.
+Bearer tokens are looked up in `data/users.json`. Each token maps to a user ID, which determines the storage directory (`data/{userId}/`). Token comparison uses `crypto.timingSafeEqual` to prevent timing attacks.
 
-The token maps to a hardcoded user ID (`1`). When multi-user support is added, the token-to-user mapping will be the only thing that changes — the rest of the architecture stays the same since everything is already namespaced by user ID.
+User ID 1 is the superadmin — their files are served at root-level URLs (`/file.md` instead of `/1/file.md`). Other users' files are served at `/{userId}/file.md`.
 
 ## Rendering Pipeline
 
@@ -89,16 +106,16 @@ Rendering is fully server-side. Every page view reads the file from disk and ren
 
 ## URL Scheme
 
-```
-/{userId}/{path}
-```
-
 - `/` — landing page (from `index.html` template, `{{SITE_DOMAIN}}` substituted)
-- `/{userId}/{file.md}` — renders a single markdown file
-- `/{userId}/{dir}/` — lists all `.md` files in that directory
+- `/{file.md}` — superadmin (id=1) files, no prefix
+- `/{file.md}?raw` — raw markdown content as `text/plain`
+- `/{dir}/` — superadmin directory listing
+- `/1/{path}` — redirects to `/{path}` (backwards compat)
+- `/{userId}/{file.md}` — other users' files
+- `/{userId}/{dir}/` — other users' directory listings
 - `/{userId}` — returns 404 (no public listing of all files)
 
-The user ID in the URL acts as a namespace. Users cannot see each other's files.
+The user ID in the URL acts as a namespace. Superadmin (id=1) is special — their files are served directly from root. Users cannot see each other's files.
 
 ## Theme System
 
@@ -119,7 +136,8 @@ Served from `index.html` in project root. Contains `{{SITE_DOMAIN}}` placeholder
 
 | Layer | Protection |
 |-------|-----------|
-| Auth | Bearer token, timing-safe comparison |
+| Auth | Bearer token from `data/users.json`, timing-safe comparison |
+| User isolation | Each user's files in separate `data/{userId}/` directory |
 | Path traversal | `path.resolve()` + startsWith check on all file operations |
 | Upload validation | Rejects `..` segments, absolute paths |
 | XSS | `html: false` in markdown-it, `escapeHtml()` on all interpolated values including href |

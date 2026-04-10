@@ -10,7 +10,6 @@ const anchor = require("markdown-it-anchor");
 // --- Config ---
 
 const PORT = process.env.PORT || 3737;
-const TOKEN = process.env.SHAREMD_TOKEN || "shmd_tk_9f4a2b7e1c8d3056";
 const SUPERADMIN_ID = 1;
 const BASE_URL = (process.env.BASE_URL || `http://localhost:${PORT}`).replace(
   /\/$/,
@@ -19,7 +18,7 @@ const BASE_URL = (process.env.BASE_URL || `http://localhost:${PORT}`).replace(
 const DATA_DIR = path.resolve(process.env.DATA_DIR || "./data");
 const SITE_DOMAIN = process.env.SITE_DOMAIN || "sharemd";
 
-fs.mkdirSync(path.join(DATA_DIR, String(SUPERADMIN_ID)), { recursive: true });
+fs.mkdirSync(DATA_DIR, { recursive: true });
 
 // --- Markdown renderer ---
 
@@ -332,18 +331,49 @@ function buildSegments(userId, filePath) {
   return segments;
 }
 
+// --- Users ---
+
+function loadUsers() {
+  const fp = path.join(DATA_DIR, "users.json");
+  let raw;
+  try {
+    raw = fs.readFileSync(fp, "utf-8");
+  } catch {
+    return [];
+  }
+  try {
+    return JSON.parse(raw);
+  } catch (e) {
+    console.error(`Failed to parse ${fp}: ${e.message}`);
+    return [];
+  }
+}
+
+function findUserByToken(token) {
+  const users = loadUsers();
+  const tokenBuf = Buffer.from(token);
+  for (const u of users) {
+    if (u.token && u.token.length === token.length &&
+        crypto.timingSafeEqual(Buffer.from(u.token), tokenBuf)) {
+      return u;
+    }
+  }
+  return null;
+}
+
 // --- Auth middleware ---
 
 function auth(req, res, next) {
   const header = req.headers.authorization;
-  const expected = `Bearer ${TOKEN}`;
-  if (
-    !header ||
-    header.length !== expected.length ||
-    !crypto.timingSafeEqual(Buffer.from(header), Buffer.from(expected))
-  ) {
+  if (!header || !header.startsWith("Bearer ")) {
     return res.status(401).json({ error: "Invalid or missing token" });
   }
+  const token = header.slice(7);
+  const user = findUserByToken(token);
+  if (!user) {
+    return res.status(401).json({ error: "Invalid or missing token" });
+  }
+  req.user = user;
   next();
 }
 
@@ -450,21 +480,22 @@ app.post("/api/upload", auth, (req, res) => {
   const { content, filename, overwrite } = req.body;
   if (!content) return res.status(400).json({ error: "content is required" });
 
+  const userId = req.user.id;
   const name = filename || "document.md";
-  const fp = resolveFilePath(SUPERADMIN_ID, name);
+  const fp = resolveFilePath(userId, name);
   if (!fp) return res.status(400).json({ error: "invalid filename" });
 
   if (fs.existsSync(fp) && !overwrite) {
     return res.status(409).json({
       exists: true,
-      url: publicUrl(SUPERADMIN_ID, name),
+      url: publicUrl(userId, name),
     });
   }
 
   fs.mkdirSync(path.dirname(fp), { recursive: true });
   fs.writeFileSync(fp, content);
 
-  res.json({ url: publicUrl(SUPERADMIN_ID, name) });
+  res.json({ url: publicUrl(userId, name) });
 });
 
 // Upload bundle (directory)
@@ -489,10 +520,12 @@ app.post("/api/upload-bundle", auth, (req, res) => {
     else if (dirPrefix !== topDir) dirPrefix = null;
   }
 
+  const userId = req.user.id;
+
   if (!overwrite) {
     const existing = files
       .filter((f) => {
-        const fp = resolveFilePath(SUPERADMIN_ID, f.path);
+        const fp = resolveFilePath(userId, f.path);
         return fp && fs.existsSync(fp);
       })
       .map((f) => f.path);
@@ -501,27 +534,27 @@ app.post("/api/upload-bundle", auth, (req, res) => {
       return res.status(409).json({
         exists: true,
         files: existing,
-        url: publicUrl(SUPERADMIN_ID, dirPrefix || ""),
+        url: publicUrl(userId, dirPrefix || ""),
       });
     }
   }
 
   for (const f of files) {
-    const fp = resolveFilePath(SUPERADMIN_ID, f.path);
-    if (!fp) continue;
+    const fp = resolveFilePath(userId, f.path);
+    if (!fp) return res.status(400).json({ error: `invalid path: ${f.path}` });
     fs.mkdirSync(path.dirname(fp), { recursive: true });
     fs.writeFileSync(fp, f.content);
   }
 
   const url = dirPrefix
-    ? publicUrl(SUPERADMIN_ID, dirPrefix)
-    : `${BASE_URL}${urlPrefix(SUPERADMIN_ID)}`;
+    ? publicUrl(userId, dirPrefix)
+    : `${BASE_URL}${urlPrefix(userId)}`;
   res.json({ url });
 });
 
 // List files (API, requires auth)
 app.get("/api/files", auth, (req, res) => {
-  const dir = userDir(SUPERADMIN_ID);
+  const dir = userDir(req.user.id);
   const files = listMdFiles(dir, dir);
   res.json({ files });
 });
@@ -536,7 +569,7 @@ app.delete("/api/delete", auth, (req, res) => {
     return res.status(400).json({ error: "invalid path" });
   }
 
-  const fp = resolveFilePath(SUPERADMIN_ID, targetPath);
+  const fp = resolveFilePath(req.user.id, targetPath);
   if (!fp) return res.status(400).json({ error: "invalid path" });
 
   if (!fs.existsSync(fp)) {
