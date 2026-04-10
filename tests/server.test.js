@@ -256,13 +256,6 @@ describe("DELETE /api/delete", () => {
 // --- Public routes ---
 
 describe("superadmin URLs", () => {
-  it("/1/path redirects to /path", async () => {
-    await req("POST", "/api/upload", { content: "# Hi", filename: "redir.md" });
-    const res = await req("GET", "/1/redir.md", null, false);
-    assert.equal(res.status, 302);
-    assert.equal(res.headers.location, "/redir.md");
-  });
-
   it("renders file at /path directly", async () => {
     await req("POST", "/api/upload", { content: "# Direct", filename: "direct.md" });
     const res = await req("GET", "/direct.md", null, false);
@@ -326,5 +319,73 @@ describe("other public routes", () => {
   it("returns 404 for non-existent file", async () => {
     const res = await req("GET", "/nope.md", null, false);
     assert.equal(res.status, 404);
+  });
+});
+
+// --- Auth routes ---
+
+describe("login/panel/logout", () => {
+  it("/login redirects to Google when not authenticated", async () => {
+    const res = await req("GET", "/login", null, false);
+    assert.equal(res.status, 302);
+    assert.ok(res.headers.location.includes("accounts.google.com"));
+  });
+
+  it("/panel redirects to /login when not authenticated", async () => {
+    const res = await req("GET", "/panel", null, false);
+    assert.equal(res.status, 302);
+    assert.equal(res.headers.location, "/login");
+  });
+
+  it("/logout redirects to / and clears cookie", async () => {
+    const res = await req("GET", "/logout", null, false);
+    assert.equal(res.status, 302);
+    assert.equal(res.headers.location, "/");
+    const cookies = [].concat(res.headers["set-cookie"] || []).join("; ");
+    assert.ok(cookies.includes("Max-Age=0"));
+  });
+});
+
+// --- Multi-user auth ---
+
+describe("multi-user token auth", () => {
+  it("different tokens map to different user directories", async () => {
+    // Add a second user to users.json
+    const usersPath = path.join(TEST_DATA, "users.json");
+    const users = JSON.parse(fs.readFileSync(usersPath, "utf-8"));
+    users.push({ id: 2, email: "other@test.com", token: "shmd_tk_other_user", registeredAt: "2026-04-10T00:00:00.000Z", storageLimitMb: 20 });
+    fs.writeFileSync(usersPath, JSON.stringify(users));
+    fs.mkdirSync(path.join(TEST_DATA, "2"), { recursive: true });
+
+    // Upload as user 2
+    const res = await req("POST", "/api/upload", { content: "# User2", filename: "u2.md" }, "shmd_tk_other_user");
+    assert.equal(res.status, 200);
+    assert.ok(res.body.url.includes("/2/u2.md")); // non-superadmin gets /{id}/ prefix
+
+    // File is in user 2's directory
+    assert.ok(fs.existsSync(path.join(TEST_DATA, "2", "u2.md")));
+    assert.ok(!fs.existsSync(path.join(TEST_DATA, "1", "u2.md")));
+  });
+
+  it("user 2 files list only their own files", async () => {
+    const usersPath = path.join(TEST_DATA, "users.json");
+    const users = JSON.parse(fs.readFileSync(usersPath, "utf-8"));
+    users.push({ id: 2, email: "other@test.com", token: "shmd_tk_other_user", registeredAt: "2026-04-10T00:00:00.000Z", storageLimitMb: 20 });
+    fs.writeFileSync(usersPath, JSON.stringify(users));
+
+    // Upload as superadmin
+    await req("POST", "/api/upload", { content: "# Admin", filename: "admin.md" });
+    // Upload as user 2
+    await req("POST", "/api/upload", { content: "# Other", filename: "other.md" }, "shmd_tk_other_user");
+
+    // List as superadmin — should not see user 2's files
+    const res1 = await req("GET", "/api/files");
+    assert.ok(res1.body.files.includes("admin.md"));
+    assert.ok(!res1.body.files.includes("other.md"));
+
+    // List as user 2 — should not see superadmin's files
+    const res2 = await req("GET", "/api/files", null, "shmd_tk_other_user");
+    assert.ok(res2.body.files.includes("other.md"));
+    assert.ok(!res2.body.files.includes("admin.md"));
   });
 });

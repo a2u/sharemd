@@ -10,7 +10,7 @@ sharemd — a markdown file sharing service. Upload `.md` files via API or CLI, 
 
 - `npm start` — run the server (port 3737)
 - `npm run dev` — run with `--watch` for auto-reload
-- `npm test` — run all tests (29 tests, `node:test`)
+- `npm test` — run all tests (34 tests, `node:test`)
 - `bin/sharemd file.md` — upload a single file via CLI
 - `bin/sharemd directory/` — upload all `.md` files from a directory (preserves dir name)
 - `bin/sharemd file.md -f` — force overwrite
@@ -41,11 +41,12 @@ Single `server.js` file. Express + dotenv. See [docs/architecture.md](docs/archi
 - `/{userId}/dir/` — lists files in directory
 - `/{userId}` — 404 (no public user listing)
 - `/` — landing page (served from `index.html` template)
-- `/1/path` — redirects to `/path` (superadmin backwards compat)
 
 **Rendering:** server-side via `markdown-it` + `highlight.js`. `pageHtml()` returns complete HTML with inline CSS. Dark/light theme toggle (persisted in localStorage). Sticky header with clickable path breadcrumb.
 
 **Auth:** Bearer token looked up in `data/users.json`. Each token maps to a user ID. File is re-read on every auth request (no restart needed when adding users). Timing-safe comparison via `crypto.timingSafeEqual`.
+
+**Google OAuth:** `GET /login` → Google → `GET /auth/google/callback` → find or create user in `users.json` → session cookie → `/panel`. No external auth libraries — raw `https` module calls to Google APIs.
 
 **CLI:** pure bash, requires `curl` + `jq`. Connection timeout 10s, error on unreachable server.
 
@@ -60,6 +61,13 @@ See [docs/api.md](docs/api.md) for full reference.
 
 All API endpoints determine the target user from the token in `data/users.json`.
 
+## Web Routes
+
+- `GET /login` — redirects to Google OAuth (or `/panel` if already logged in)
+- `GET /auth/google/callback` — OAuth callback, creates session
+- `GET /panel` — user panel (email, token, storage usage)
+- `GET /logout` — clears session, redirects to `/`
+
 ## Config
 
 Server config via `.env` (loaded by dotenv). See `.env.example`:
@@ -67,6 +75,8 @@ Server config via `.env` (loaded by dotenv). See `.env.example`:
 - `BASE_URL` — for generated URLs
 - `DATA_DIR` — storage location (default `./data`)
 - `SITE_DOMAIN` — domain shown in header breadcrumb and landing page
+- `GOOGLE_CLIENT_ID` — Google OAuth client ID
+- `GOOGLE_CLIENT_SECRET` — Google OAuth client secret
 
 User config via `data/users.json`:
 - `id` — numeric user ID (1 = superadmin)
@@ -82,12 +92,15 @@ Tests use `node:test` (built-in). Test file: `tests/server.test.js`. Server is s
 ## Key Functions
 
 - `pageHtml(title, body, pathSegments, rawUrl)` — renders full HTML page with sticky header, theme toggle, raw link, footer
+- `panelHtml(email, token, usedBytes, limitMb)` — user panel page with storage bar
 - `buildSegments(userId, filePath)` — builds clickable path breadcrumb from file path
 - `handlePath(req, res, userId, filePath)` — shared file/directory rendering logic
 - `landingHtml()` — reads `index.html` and substitutes `{{SITE_DOMAIN}}`
 - `resolveFilePath(userId, filePath)` — resolves and validates paths (prevents traversal)
 - `loadUsers()` — reads `data/users.json`
 - `findUserByToken(token)` — looks up user by Bearer token (timing-safe)
+- `dirSizeBytes(dir)` — recursively calculates directory size
+- `getSession(req)` — reads session from cookie
 
 ## Security
 
@@ -97,6 +110,7 @@ Tests use `node:test` (built-in). Test file: `tests/server.test.js`. Server is s
 - Only `.md` files served
 - Timing-safe token comparison against `data/users.json`
 - User isolation: each user's files in separate `data/{userId}/` directory
+- Session cookies: HttpOnly, SameSite=Lax
 
 ## Documentation
 

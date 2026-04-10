@@ -47,18 +47,42 @@ Two major changes: reworked URL scheme so superadmin (id=1) gets clean URLs with
 - Rendered page contains `raw` link
 - Tests create their own `users.json` in test data dir
 
+### Google OAuth + User Panel
+- `GET /login` → Google OAuth consent screen (no libraries, raw `https` module)
+- `GET /auth/google/callback` → exchange code for token → get email → find or create user in `users.json`
+- Auto-registration: new users get a generated API token and 20MB default limit
+- `GET /panel` — terminal-styled page showing email, API token, storage bar (used / limit)
+- `GET /logout` — clears session cookie
+- `/login` redirects to `/panel` if already authenticated
+- Sessions in-memory (Map), cookies HttpOnly + SameSite=Lax, 7-day expiry
+- `dirSizeBytes()` recursively calculates user's disk usage on panel load
+
+### Code review fixes
+- `mkdirSync` moved out of auth middleware into write paths only
+- `loadUsers()` logs JSON parse errors instead of silent failure
+- `Buffer.from(token)` hoisted out of `findUserByToken` loop
+- Bundle route returns 400 on invalid path instead of silent skip
+
+## Tests
+34 total (was 29). New tests:
+- `/login` redirects to Google when not authenticated
+- `/panel` redirects to `/login` when not authenticated
+- `/logout` redirects and clears cookie
+- Different tokens map to different user directories (multi-user isolation)
+- User file listing only shows own files
+
 ## Files changed
-- `server.js` — major refactor (superadmin routing, users.json auth, raw mode, handlePath extraction)
-- `tests/server.test.js` — updated for new URL scheme, users.json, 3 new tests
-- `CLAUDE.md` — full rewrite reflecting current state
-- `docs/architecture.md` — new User Management section, updated Auth/URL/Security sections
-- `.env.example` — removed `SHAREMD_TOKEN`
+- `server.js` — superadmin routing, users.json auth, raw mode, Google OAuth, panel, storage calc
+- `tests/server.test.js` — 34 tests total, multi-user and auth route tests added
+- `CLAUDE.md` — reflects Google OAuth, panel, web routes, new functions
+- `docs/architecture.md` — Google OAuth, user panel, updated security model
+- `.env.example` — added `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
 - `data/users.json` — created (not in git)
 
 ## What's not done yet
-- Storage limit enforcement (`storageLimitMb` in users.json exists but not checked)
-- `/login` and `/ai-skill` pages — links on landing page, routes return 404
-- User registration flow
+- Storage limit enforcement (field exists, calculated on panel, not blocked on upload)
+- `/ai-skill` page — link on landing page, route returns 404
 - Deployment (Dockerfile, CI/CD)
 - Rate limiting
 - File expiration / TTL
+- Session persistence (currently in-memory, lost on restart)

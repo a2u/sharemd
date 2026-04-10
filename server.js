@@ -9,6 +9,8 @@ const anchor = require("markdown-it-anchor");
 
 // --- Config ---
 
+const https = require("https");
+
 const PORT = process.env.PORT || 3737;
 const SUPERADMIN_ID = 1;
 const BASE_URL = (process.env.BASE_URL || `http://localhost:${PORT}`).replace(
@@ -17,6 +19,8 @@ const BASE_URL = (process.env.BASE_URL || `http://localhost:${PORT}`).replace(
 );
 const DATA_DIR = path.resolve(process.env.DATA_DIR || "./data");
 const SITE_DOMAIN = process.env.SITE_DOMAIN || "sharemd";
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
@@ -82,6 +86,70 @@ const LANDING_TEMPLATE = fs.readFileSync(path.join(__dirname, "index.html"), "ut
 
 function landingHtml() {
   return LANDING_TEMPLATE.replace(/\{\{SITE_DOMAIN\}\}/g, escapeHtml(SITE_DOMAIN));
+}
+
+function panelHtml(email, token, usedBytes, limitMb) {
+  const limitBytes = limitMb * 1024 * 1024;
+  const pct = limitBytes > 0 ? Math.min(100, (usedBytes / limitBytes) * 100).toFixed(1) : 0;
+  const barWidth = Math.min(100, Math.round(pct));
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>panel — ${escapeHtml(SITE_DOMAIN)}</title>
+  <link rel="icon" href="/favicon.ico">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0a0a0a;
+      color: #aaa;
+      font-family: "Courier New", Courier, monospace;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .terminal { max-width: 640px; padding: 2rem; }
+    .title { color: #fff; font-size: 1rem; margin-bottom: 2rem; }
+    .field { margin-bottom: 1.2rem; font-size: 0.85rem; line-height: 1.6; }
+    .label { color: #666; }
+    .value { color: #fff; }
+    .token { color: #fff; font-size: 0.75rem; word-break: break-all; }
+    .bar-bg {
+      margin-top: 0.4rem;
+      height: 6px; background: #222; border-radius: 3px; overflow: hidden;
+    }
+    .bar-fill { height: 100%; background: #aaa; border-radius: 3px; }
+    .nav { margin-top: 2rem; font-size: 0.8rem; display: flex; gap: 1.5rem; }
+    .nav a { color: #666; text-decoration: none; }
+    .nav a:hover { color: #fff; }
+  </style>
+</head>
+<body>
+  <div class="terminal">
+    <div class="title">~ panel</div>
+    <div class="field">
+      <span class="label">email</span><br>
+      <span class="value">${escapeHtml(email)}</span>
+    </div>
+    <div class="field">
+      <span class="label">token</span><br>
+      <span class="token">${escapeHtml(token)}</span>
+    </div>
+    <div class="field">
+      <span class="label">storage</span><br>
+      <span class="value">${formatBytes(usedBytes)}</span> <span class="label">/ ${limitMb} MB (${pct}%)</span>
+      <div class="bar-bg"><div class="bar-fill" style="width:${barWidth}%"></div></div>
+    </div>
+    <div class="nav">
+      <a href="/">/home</a>
+      <a href="/logout">/logout</a>
+    </div>
+  </div>
+</body>
+</html>`;
 }
 
 const CSS = `
@@ -304,6 +372,31 @@ function listMdFiles(dir, baseDir) {
     }
   }
   return results.sort();
+}
+
+function dirSizeBytes(dir) {
+  let total = 0;
+  let entries;
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return 0;
+  }
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      total += dirSizeBytes(full);
+    } else {
+      try { total += fs.statSync(full).size; } catch {}
+    }
+  }
+  return total;
+}
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function rmRecursive(target) {
@@ -587,6 +680,163 @@ app.delete("/api/delete", auth, (req, res) => {
   }
 });
 
+// --- Google OAuth ---
+
+function httpsPost(url, body) {
+  return new Promise((resolve, reject) => {
+    const data = typeof body === "string" ? body : new URLSearchParams(body).toString();
+    const parsed = new URL(url);
+    const req = https.request({
+      hostname: parsed.hostname,
+      path: parsed.pathname,
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Content-Length": Buffer.byteLength(data),
+      },
+    }, (res) => {
+      let chunks = "";
+      res.on("data", (c) => (chunks += c));
+      res.on("end", () => {
+        try { resolve(JSON.parse(chunks)); } catch { reject(new Error(chunks)); }
+      });
+    });
+    req.on("error", reject);
+    req.write(data);
+    req.end();
+  });
+}
+
+function httpsGet(url, headers) {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url);
+    const req = https.request({
+      hostname: parsed.hostname,
+      path: parsed.pathname + parsed.search,
+      method: "GET",
+      headers,
+    }, (res) => {
+      let chunks = "";
+      res.on("data", (c) => (chunks += c));
+      res.on("end", () => {
+        try { resolve(JSON.parse(chunks)); } catch { reject(new Error(chunks)); }
+      });
+    });
+    req.on("error", reject);
+    req.end();
+  });
+}
+
+// In-memory session store: sessionId → { userId, email }
+const sessions = new Map();
+
+function createSession(user) {
+  const sid = crypto.randomBytes(24).toString("base64url");
+  sessions.set(sid, { userId: user.id, email: user.email });
+  return sid;
+}
+
+function getSession(req) {
+  const cookie = req.headers.cookie || "";
+  const match = cookie.match(/(?:^|;\s*)sid=([^\s;]+)/);
+  if (!match) return null;
+  return sessions.get(match[1]) || null;
+}
+
+app.get("/login", (req, res) => {
+  if (getSession(req)) return res.redirect("/panel");
+  if (!GOOGLE_CLIENT_ID) {
+    return res.status(500).send(pageHtml("Error", "<h1>Google OAuth not configured</h1><p>Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env</p>"));
+  }
+  const params = new URLSearchParams({
+    client_id: GOOGLE_CLIENT_ID,
+    redirect_uri: `${BASE_URL}/auth/google/callback`,
+    response_type: "code",
+    scope: "email profile",
+    prompt: "select_account",
+  });
+  res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
+});
+
+app.get("/auth/google/callback", async (req, res) => {
+  const { code, error } = req.query;
+  if (error || !code) {
+    return res.status(400).send(pageHtml("Login Failed", `<h1>Login failed</h1><p>${escapeHtml(error || "No code received")}</p>`));
+  }
+
+  try {
+    // Exchange code for tokens
+    const tokens = await httpsPost("https://oauth2.googleapis.com/token", {
+      code,
+      client_id: GOOGLE_CLIENT_ID,
+      client_secret: GOOGLE_CLIENT_SECRET,
+      redirect_uri: `${BASE_URL}/auth/google/callback`,
+      grant_type: "authorization_code",
+    });
+
+    if (!tokens.access_token) {
+      return res.status(400).send(pageHtml("Login Failed", "<h1>Login failed</h1><p>Could not get access token</p>"));
+    }
+
+    // Get user info
+    const userInfo = await httpsGet(
+      "https://www.googleapis.com/oauth2/v2/userinfo",
+      { Authorization: `Bearer ${tokens.access_token}` }
+    );
+
+    if (!userInfo.email) {
+      return res.status(400).send(pageHtml("Login Failed", "<h1>Login failed</h1><p>Could not get email</p>"));
+    }
+
+    // Find or create user
+    const users = loadUsers();
+    let user = users.find((u) => u.email === userInfo.email);
+
+    if (!user) {
+      const maxId = users.reduce((m, u) => Math.max(m, u.id), 0);
+      user = {
+        id: maxId + 1,
+        email: userInfo.email,
+        token: `shmd_tk_${crypto.randomBytes(12).toString("hex")}`,
+        registeredAt: new Date().toISOString(),
+        storageLimitMb: 20,
+      };
+      users.push(user);
+      fs.writeFileSync(path.join(DATA_DIR, "users.json"), JSON.stringify(users, null, 2));
+    }
+
+    // Create session
+    const sid = createSession(user);
+    res.setHeader("Set-Cookie", `sid=${sid}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800`);
+    res.redirect("/panel");
+  } catch (e) {
+    console.error("Google OAuth error:", e.message);
+    res.status(500).send(pageHtml("Error", "<h1>Login error</h1><p>Something went wrong</p>"));
+  }
+});
+
+app.get("/logout", (req, res) => {
+  const cookie = req.headers.cookie || "";
+  const match = cookie.match(/(?:^|;\s*)sid=([^\s;]+)/);
+  if (match) sessions.delete(match[1]);
+  res.setHeader("Set-Cookie", "sid=; Path=/; HttpOnly; Max-Age=0");
+  res.redirect("/");
+});
+
+app.get("/panel", (req, res) => {
+  const session = getSession(req);
+  if (!session) return res.redirect("/login");
+
+  const users = loadUsers();
+  const user = users.find((u) => u.id === session.userId);
+  const email = user ? user.email : session.email;
+  const token = user ? user.token : "—";
+  const limitMb = user ? user.storageLimitMb : 20;
+  const usedBytes = dirSizeBytes(userDir(session.userId));
+
+  res.send(panelHtml(email, token, usedBytes, limitMb));
+});
+
 // --- Public routes ---
 
 // Landing page
@@ -604,10 +854,7 @@ app.get("/:userId/:filePath(*)", (req, res, next) => {
   const userId = req.params.userId;
   if (!/^\d+$/.test(userId)) return next();
 
-  // Superadmin: redirect /1/path → /path
-  if (Number(userId) === SUPERADMIN_ID) {
-    return res.redirect(`/${req.params.filePath}`);
-  }
+
 
   handlePath(req, res, userId, req.params.filePath);
 });

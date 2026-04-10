@@ -73,9 +73,19 @@ The file is re-read on every authenticated request — no server restart needed 
 
 ## Authentication
 
-Bearer tokens are looked up in `data/users.json`. Each token maps to a user ID, which determines the storage directory (`data/{userId}/`). Token comparison uses `crypto.timingSafeEqual` to prevent timing attacks.
+Two auth methods:
+
+**API auth (Bearer token):** Tokens are looked up in `data/users.json`. Each token maps to a user ID, which determines the storage directory (`data/{userId}/`). Token comparison uses `crypto.timingSafeEqual` to prevent timing attacks.
+
+**Web auth (Google OAuth):** `GET /login` → Google OAuth consent → callback → find or create user in `users.json` → session cookie. No external auth libraries — raw Node.js `https` module makes 3 HTTP calls to Google APIs (auth redirect, token exchange, userinfo). Sessions are stored in-memory (`Map`), cookies are HttpOnly with SameSite=Lax.
+
+New users are auto-registered on first Google login — a new entry is added to `users.json` with a generated API token and default 20MB storage limit.
 
 User ID 1 is the superadmin — their files are served at root-level URLs (`/file.md` instead of `/1/file.md`). Other users' files are served at `/{userId}/file.md`.
+
+## User Panel
+
+`GET /panel` shows the logged-in user's email, API token, and storage usage (used / limit with progress bar). Storage is calculated on each page load by recursively walking `data/{userId}/`. Terminal aesthetic matching the landing page.
 
 ## Rendering Pipeline
 
@@ -110,7 +120,6 @@ Rendering is fully server-side. Every page view reads the file from disk and ren
 - `/{file.md}` — superadmin (id=1) files, no prefix
 - `/{file.md}?raw` — raw markdown content as `text/plain`
 - `/{dir}/` — superadmin directory listing
-- `/1/{path}` — redirects to `/{path}` (backwards compat)
 - `/{userId}/{file.md}` — other users' files
 - `/{userId}/{dir}/` — other users' directory listings
 - `/{userId}` — returns 404 (no public listing of all files)
@@ -136,7 +145,8 @@ Served from `index.html` in project root. Contains `{{SITE_DOMAIN}}` placeholder
 
 | Layer | Protection |
 |-------|-----------|
-| Auth | Bearer token from `data/users.json`, timing-safe comparison |
+| API auth | Bearer token from `data/users.json`, timing-safe comparison |
+| Web auth | Google OAuth, HttpOnly session cookies, SameSite=Lax |
 | User isolation | Each user's files in separate `data/{userId}/` directory |
 | Path traversal | `path.resolve()` + startsWith check on all file operations |
 | Upload validation | Rejects `..` segments, absolute paths |
