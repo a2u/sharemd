@@ -568,6 +568,20 @@ const app = express();
 app.use(express.static(path.join(__dirname, "public")));
 app.use(express.json({ limit: "10mb" }));
 
+function checkStorageLimit(user, newBytes) {
+  const limitMb = user.storageLimitMb != null ? user.storageLimitMb : 20;
+  const limitBytes = limitMb * 1024 * 1024;
+  const usedBytes = dirSizeBytes(userDir(user.id));
+  if (usedBytes + newBytes > limitBytes) {
+    return {
+      error: "storage limit exceeded",
+      used: formatBytes(usedBytes),
+      limit: `${limitMb} MB`,
+    };
+  }
+  return null;
+}
+
 // Upload single file
 app.post("/api/upload", auth, (req, res) => {
   const { content, filename, overwrite } = req.body;
@@ -584,6 +598,9 @@ app.post("/api/upload", auth, (req, res) => {
       url: publicUrl(userId, name),
     });
   }
+
+  const limitErr = checkStorageLimit(req.user, Buffer.byteLength(content));
+  if (limitErr) return res.status(413).json(limitErr);
 
   fs.mkdirSync(path.dirname(fp), { recursive: true });
   fs.writeFileSync(fp, content);
@@ -614,6 +631,9 @@ app.post("/api/upload-bundle", auth, (req, res) => {
   }
 
   const userId = req.user.id;
+  const totalNewBytes = files.reduce((sum, f) => sum + Buffer.byteLength(f.content), 0);
+  const limitErr = checkStorageLimit(req.user, totalNewBytes);
+  if (limitErr) return res.status(413).json(limitErr);
 
   if (!overwrite) {
     const existing = files
@@ -727,20 +747,48 @@ function httpsGet(url, headers) {
   });
 }
 
-// In-memory session store: sessionId → { userId, email }
-const sessions = new Map();
+// Signed cookie sessions (survive restarts, no server-side storage)
+
+const SECRET_PATH = path.join(DATA_DIR, ".session-secret");
+const SESSION_SECRET = (() => {
+  try {
+    return fs.readFileSync(SECRET_PATH, "utf-8").trim();
+  } catch {
+    const secret = crypto.randomBytes(32).toString("hex");
+    fs.writeFileSync(SECRET_PATH, secret);
+    return secret;
+  }
+})();
+
+function signSession(payload) {
+  const data = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const sig = crypto.createHmac("sha256", SESSION_SECRET).update(data).digest("base64url");
+  return `${data}.${sig}`;
+}
+
+function verifySession(cookie) {
+  const [data, sig] = cookie.split(".");
+  if (!data || !sig) return null;
+  const expected = crypto.createHmac("sha256", SESSION_SECRET).update(data).digest("base64url");
+  if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(data, "base64url").toString());
+    if (payload.exp && Date.now() > payload.exp) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
 
 function createSession(user) {
-  const sid = crypto.randomBytes(24).toString("base64url");
-  sessions.set(sid, { userId: user.id, email: user.email });
-  return sid;
+  return signSession({ userId: user.id, email: user.email, exp: Date.now() + 7 * 24 * 60 * 60 * 1000 });
 }
 
 function getSession(req) {
   const cookie = req.headers.cookie || "";
   const match = cookie.match(/(?:^|;\s*)sid=([^\s;]+)/);
   if (!match) return null;
-  return sessions.get(match[1]) || null;
+  return verifySession(match[1]);
 }
 
 app.get("/login", (req, res) => {
@@ -816,9 +864,6 @@ app.get("/auth/google/callback", async (req, res) => {
 });
 
 app.get("/logout", (req, res) => {
-  const cookie = req.headers.cookie || "";
-  const match = cookie.match(/(?:^|;\s*)sid=([^\s;]+)/);
-  if (match) sessions.delete(match[1]);
   res.setHeader("Set-Cookie", "sid=; Path=/; HttpOnly; Max-Age=0");
   res.redirect("/");
 });

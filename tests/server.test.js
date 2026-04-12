@@ -389,3 +389,37 @@ describe("multi-user token auth", () => {
     assert.ok(!res2.body.files.includes("admin.md"));
   });
 });
+
+// --- Storage limits ---
+
+describe("storage limits", () => {
+  it("rejects upload when storage limit exceeded", async () => {
+    // Set user's limit to tiny (1 byte effectively) by rewriting users.json
+    const usersPath = path.join(TEST_DATA, "users.json");
+    fs.writeFileSync(usersPath, JSON.stringify([
+      { id: SUPERADMIN_ID, email: "test@test.com", token: TOKEN, registeredAt: "2026-04-09T00:00:00.000Z", storageLimitMb: 0 }
+    ]));
+
+    const res = await req("POST", "/api/upload", { content: "# Big", filename: "big.md" });
+    assert.equal(res.status, 413);
+    assert.ok(res.body.error.includes("storage limit"));
+  });
+
+  it("rejects bundle upload when storage limit exceeded", async () => {
+    const usersPath = path.join(TEST_DATA, "users.json");
+    fs.writeFileSync(usersPath, JSON.stringify([
+      { id: SUPERADMIN_ID, email: "test@test.com", token: TOKEN, registeredAt: "2026-04-09T00:00:00.000Z", storageLimitMb: 0 }
+    ]));
+
+    const res = await req("POST", "/api/upload-bundle", {
+      files: [{ path: "d/a.md", content: "# A" }],
+    });
+    assert.equal(res.status, 413);
+    assert.ok(res.body.error.includes("storage limit"));
+  });
+
+  it("allows upload within storage limit", async () => {
+    const res = await req("POST", "/api/upload", { content: "# OK", filename: "ok.md" });
+    assert.equal(res.status, 200);
+  });
+});

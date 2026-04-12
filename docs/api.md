@@ -176,3 +176,4 @@ All errors return JSON:
 | 401 | Missing or invalid token |
 | 404 | File/directory not found |
 | 409 | File already exists (use `overwrite: true`) |
+| 413 | Storage limit exceeded |

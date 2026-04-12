@@ -10,7 +10,7 @@ sharemd — a markdown file sharing service. Upload `.md` files via API or CLI, 
 
 - `npm start` — run the server (port 3737)
 - `npm run dev` — run with `--watch` for auto-reload
-- `npm test` — run all tests (34 tests, `node:test`)
+- `npm test` — run all tests (36 tests, `node:test`)
 - `bin/sharemd file.md` — upload a single file via CLI
 - `bin/sharemd directory/` — upload all `.md` files from a directory (preserves dir name)
 - `bin/sharemd file.md -f` — force overwrite
@@ -46,7 +46,7 @@ Single `server.js` file. Express + dotenv. See [docs/architecture.md](docs/archi
 
 **Auth:** Bearer token looked up in `data/users.json`. Each token maps to a user ID. File is re-read on every auth request (no restart needed when adding users). Timing-safe comparison via `crypto.timingSafeEqual`.
 
-**Google OAuth:** `GET /login` → Google → `GET /auth/google/callback` → find or create user in `users.json` → session cookie → `/panel`. No external auth libraries — raw `https` module calls to Google APIs.
+**Google OAuth:** `GET /login` → Google → `GET /auth/google/callback` → find or create user in `users.json` → signed session cookie → `/panel`. No external auth libraries — raw `https` module calls to Google APIs. Sessions are HMAC-signed cookies (survive server restarts, no server-side storage). Secret auto-generated in `data/.session-secret`.
 
 **CLI:** pure bash, requires `curl` + `jq`. Connection timeout 10s, error on unreachable server.
 
@@ -83,7 +83,7 @@ User config via `data/users.json`:
 - `email` — user email
 - `token` — Bearer token for API auth
 - `registeredAt` — ISO date
-- `storageLimitMb` — disk quota in megabytes (not enforced yet)
+- `storageLimitMb` — disk quota in megabytes (enforced on upload, 413 if exceeded)
 
 ## Testing
 

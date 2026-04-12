@@ -77,7 +77,7 @@ Two auth methods:
 
 **API auth (Bearer token):** Tokens are looked up in `data/users.json`. Each token maps to a user ID, which determines the storage directory (`data/{userId}/`). Token comparison uses `crypto.timingSafeEqual` to prevent timing attacks.
 
-**Web auth (Google OAuth):** `GET /login` → Google OAuth consent → callback → find or create user in `users.json` → session cookie. No external auth libraries — raw Node.js `https` module makes 3 HTTP calls to Google APIs (auth redirect, token exchange, userinfo). Sessions are stored in-memory (`Map`), cookies are HttpOnly with SameSite=Lax.
+**Web auth (Google OAuth):** `GET /login` → Google OAuth consent → callback → find or create user in `users.json` → signed session cookie. No external auth libraries — raw Node.js `https` module makes 3 HTTP calls to Google APIs (auth redirect, token exchange, userinfo). Sessions are HMAC-signed cookies (no server-side storage, survive restarts). Signing secret auto-generated in `data/.session-secret`. Cookies are HttpOnly with SameSite=Lax, 7-day expiry baked into signed payload.
 
 New users are auto-registered on first Google login — a new entry is added to `users.json` with a generated API token and default 20MB storage limit.
 
