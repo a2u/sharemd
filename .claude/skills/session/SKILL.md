@@ -1,3 +1,11 @@
+---
+name: session
+description: Generate a daily development session report in sessions/ directory. Use when wrapping up work for the day or when asked to summarize what was done.
+disable-model-invocation: true
+allowed-tools: Bash(git log *) Bash(git diff *) Bash(npm test) Read Glob Write
+argument-hint: [topic-override]
+---
+
 Create a development session report for today.
 
 ## Steps
@@ -6,7 +14,7 @@ Create a development session report for today.
 2. Read the latest file in `sessions/` to understand the format and what was previously listed as "not done yet"
 3. Run `git diff --stat {last-session-commit}..HEAD` to get file change statistics
 4. Run `npm test` to get the current test count
-5. Create a new file `sessions/YYYY-MM-DD-{short-topic}.md` where the date is today and the topic is a 2-4 word slug describing the main work done
+5. Create a new file `sessions/YYYY-MM-DD-{short-topic}.md` where the date is today and the topic is a 2-4 word slug describing the main work done (or use $ARGUMENTS if provided)
 
 ## Report format
 
