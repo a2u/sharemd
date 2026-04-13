@@ -54,6 +54,7 @@ New tests:
 
 ## Rules
 
+- ONE report per date — never create two files for the same day. If a report for today already exists, update it instead of creating a new one
 - Be factual — describe what the code does, not intentions
 - Include function names, routes, file paths where relevant
 - The "not done yet" section should be an honest backlog — carry forward from previous session, remove completed items, add new ones
