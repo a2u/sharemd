@@ -3,13 +3,12 @@ const express = require("express");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const https = require("https");
 const MarkdownIt = require("markdown-it");
 const hljs = require("highlight.js");
 const anchor = require("markdown-it-anchor");
 
 // --- Config ---
-
-const https = require("https");
 
 const PORT = process.env.PORT || 3737;
 const SUPERADMIN_ID = 1;
@@ -685,11 +684,13 @@ app.delete("/api/delete", auth, (req, res) => {
   const fp = resolveFilePath(req.user.id, targetPath);
   if (!fp) return res.status(400).json({ error: "invalid path" });
 
-  if (!fs.existsSync(fp)) {
+  let stat;
+  try {
+    stat = fs.statSync(fp);
+  } catch {
     return res.status(404).json({ error: "not found" });
   }
 
-  const stat = fs.statSync(fp);
   if (stat.isDirectory()) {
     const files = listMdFiles(fp, fp);
     rmRecursive(fp);
@@ -903,9 +904,6 @@ app.get("/:userId", (req, res, next) => {
 app.get("/:userId/:filePath(*)", (req, res, next) => {
   const userId = req.params.userId;
   if (!/^\d+$/.test(userId)) return next();
-
-
-
   handlePath(req, res, userId, req.params.filePath);
 });
 
