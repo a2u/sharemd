@@ -423,3 +423,14 @@ describe("storage limits", () => {
     assert.equal(res.status, 200);
   });
 });
+
+// --- Health check ---
+
+describe("health check", () => {
+  it("GET /health returns ok with uptime", async () => {
+    const res = await req("GET", "/health", null, false);
+    assert.equal(res.status, 200);
+    assert.equal(res.body.status, "ok");
+    assert.equal(typeof res.body.uptime, "number");
+  });
+});

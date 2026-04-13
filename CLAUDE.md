@@ -10,7 +10,8 @@ sharemd — a markdown file sharing service. Upload `.md` files via API or CLI, 
 
 - `npm start` — run the server (port 3737)
 - `npm run dev` — run with `--watch` for auto-reload
-- `npm test` — run all tests (36 tests, `node:test`)
+- `npm test` — run all tests (37 tests, `node:test`)
+- `docker compose up -d` — run via Docker
 - `bin/sharemd file.md` — upload a single file via CLI
 - `bin/sharemd directory/` — upload all `.md` files from a directory (preserves dir name)
 - `bin/sharemd file.md -f` — force overwrite
@@ -117,3 +118,4 @@ Tests use `node:test` (built-in). Test file: `tests/server.test.js`. Server is s
 - [Architecture](docs/architecture.md) — system design and decisions
 - [API Reference](docs/api.md) — all endpoints with examples
 - [CLI Reference](docs/cli.md) — command-line usage
+- [Deployment](docs/deployment.md) — Docker, reverse proxy, configuration

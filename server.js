@@ -882,6 +882,11 @@ app.get("/panel", (req, res) => {
   res.send(panelHtml(email, token, usedBytes, limitMb));
 });
 
+// Health check
+app.get("/health", (req, res) => {
+  res.json({ status: "ok", uptime: Math.floor(process.uptime()) });
+});
+
 // --- Public routes ---
 
 // Landing page
