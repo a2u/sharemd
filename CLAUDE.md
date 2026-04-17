@@ -65,9 +65,12 @@ All API endpoints determine the target user from the token in `data/users.json`.
 ## Web Routes
 
 - `GET /login` — redirects to Google OAuth (or `/panel` if already logged in)
+- `GET /login/denied` — 403 page shown when registration is blocked by `ALLOWED_EMAILS`
 - `GET /auth/google/callback` — OAuth callback, creates session
-- `GET /panel` — user panel (email, token, storage usage)
+- `GET /panel` — user panel (email, token, storage usage, install one-liner)
 - `GET /logout` — clears session, redirects to `/`
+- `GET /install?token=<tok>` — returns a bash installer that drops the CLI to `~/.local/bin/sharemd` and writes `~/.sharemdrc` with URL + token. Token pattern is validated (`[A-Za-z0-9_]{8,128}`); anything else is discarded.
+- `GET /install/cli` — serves the raw `bin/sharemd` content (fetched by the installer).
 
 ## Config
 

@@ -98,11 +98,70 @@ function pageHtml(title, bodyContent, pathSegments, rawUrl) {
 
 const LANDING_TEMPLATE = fs.readFileSync(path.join(__dirname, "index.html"), "utf-8");
 const DENIED_TEMPLATE = fs.readFileSync(path.join(__dirname, "denied.html"), "utf-8");
+const CLI_SCRIPT = fs.readFileSync(path.join(__dirname, "bin", "sharemd"), "utf-8");
 
 function landingHtml() {
   return LANDING_TEMPLATE
     .replace(/\{\{SITE_DOMAIN\}\}/g, escapeHtml(SITE_DOMAIN))
     .replace(/\{\{VERSION\}\}/g, escapeHtml(VERSION));
+}
+
+function buildInstallScript(token) {
+  const url = BASE_URL;
+  return `#!/usr/bin/env bash
+set -euo pipefail
+
+SHAREMD_URL="${url}"
+SHAREMD_TOKEN="${token}"
+
+if [ -z "$SHAREMD_TOKEN" ]; then
+  echo "error: missing token. Copy the full command from your /panel page." >&2
+  exit 1
+fi
+
+command -v curl >/dev/null || { echo "error: curl is required" >&2; exit 1; }
+command -v jq   >/dev/null || { echo "error: jq is required (brew install jq / apt install jq)" >&2; exit 1; }
+
+INSTALL_DIR="\${SHAREMD_INSTALL_DIR:-$HOME/.local/bin}"
+mkdir -p "$INSTALL_DIR"
+
+echo "Downloading sharemd CLI to $INSTALL_DIR/sharemd ..."
+curl -fsSL "$SHAREMD_URL/install/cli" -o "$INSTALL_DIR/sharemd"
+chmod +x "$INSTALL_DIR/sharemd"
+
+CONFIG="$HOME/.sharemdrc"
+umask 077
+cat > "$CONFIG" <<EOF
+export SHAREMD_URL="$SHAREMD_URL"
+export SHAREMD_TOKEN="$SHAREMD_TOKEN"
+EOF
+
+for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
+  [ -f "$rc" ] || continue
+  grep -q 'sharemdrc' "$rc" 2>/dev/null && continue
+  printf '\\n[ -f "$HOME/.sharemdrc" ] && source "$HOME/.sharemdrc"\\n' >> "$rc"
+done
+
+case ":$PATH:" in
+  *":$INSTALL_DIR:"*) ;;
+  *)
+    echo ""
+    echo "note: $INSTALL_DIR is not in your PATH yet. Add this to your shell rc:"
+    echo "  export PATH=\\"\\$PATH:$INSTALL_DIR\\""
+    ;;
+esac
+
+echo ""
+echo "Installed."
+echo "  binary: $INSTALL_DIR/sharemd"
+echo "  config: $CONFIG"
+echo ""
+echo "Activate in this shell:"
+echo "  source $CONFIG"
+echo ""
+echo "Then try:"
+echo "  sharemd yourfile.md"
+`;
 }
 
 function deniedHtml() {
@@ -148,6 +207,22 @@ function panelHtml(email, token, usedBytes, limitMb) {
       height: 6px; background: #222; border-radius: 3px; overflow: hidden;
     }
     .bar-fill { height: 100%; background: #aaa; border-radius: 3px; }
+    .snippet {
+      display: block;
+      margin-top: 0.4rem;
+      padding: 0.6rem 0.8rem;
+      background: #141414;
+      border: 1px solid #222;
+      border-radius: 4px;
+      color: #fff;
+      font-family: inherit;
+      font-size: 0.75rem;
+      line-height: 1.5;
+      word-break: break-all;
+      white-space: pre-wrap;
+      user-select: all;
+    }
+    .hint { color: #666; font-size: 0.75rem; margin-top: 0.4rem; }
     .nav { margin-top: 2rem; font-size: 0.8rem; display: flex; gap: 1.5rem; }
     .nav a { color: #666; text-decoration: none; }
     .nav a:hover { color: #fff; }
@@ -168,6 +243,11 @@ function panelHtml(email, token, usedBytes, limitMb) {
       <span class="label">storage</span><br>
       <span class="value">${formatBytes(usedBytes)}</span> <span class="label">/ ${limitMb} MB (${pct}%)</span>
       <div class="bar-bg"><div class="bar-fill" style="width:${barWidth}%"></div></div>
+    </div>
+    <div class="field">
+      <span class="label">install cli</span>
+      <code class="snippet">curl -fsSL ${escapeHtml(BASE_URL)}/install?token=${escapeHtml(token)} | bash</code>
+      <div class="hint">Paste in your terminal. Requires <span class="value">curl</span> and <span class="value">jq</span>. Then: <span class="value">sharemd file.md</span></div>
     </div>
     <div class="nav">
       <a href="/">/home</a>
@@ -920,6 +1000,21 @@ app.get("/panel", (req, res) => {
 // Health check
 app.get("/health", (req, res) => {
   res.json({ status: "ok", uptime: Math.floor(process.uptime()), version: VERSION });
+});
+
+// Shell installer: curl -fsSL $BASE_URL/install?token=... | bash
+app.get("/install", (req, res) => {
+  const rawToken = String(req.query.token || "").trim();
+  const tokenOk = /^[A-Za-z0-9_]{8,128}$/.test(rawToken);
+
+  res.set("Content-Type", "text/plain; charset=utf-8");
+  res.send(buildInstallScript(tokenOk ? rawToken : ""));
+});
+
+// Raw CLI binary (the installer curls this)
+app.get("/install/cli", (req, res) => {
+  res.set("Content-Type", "text/plain; charset=utf-8");
+  res.send(CLI_SCRIPT);
 });
 
 // --- Public routes ---

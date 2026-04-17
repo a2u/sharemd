@@ -154,15 +154,25 @@ To pin a specific version instead of always tracking `latest`, edit `docker-comp
     image: ghcr.io/a2u/sharemd:0.9.0
 ```
 
+## Install the CLI
+
+Log in at `https://your-instance/` and open `/panel`. Copy the install command shown there and run it once on any machine:
+
+```bash
+curl -fsSL https://your-instance/install?token=shmd_tk_xxxx | bash
+```
+
+This drops the `sharemd` binary into `~/.local/bin/sharemd` and wires your shell (`.bashrc` / `.zshrc`) with the right token and URL. Needs `curl` and `jq`.
+
 ## Share files
 
 ```bash
 # Single file
-bin/sharemd article.md
+sharemd article.md
 # → https://share.example.com/article.md
 
 # Directory
-bin/sharemd docs/
+sharemd docs/
 # → https://share.example.com/docs
 ```
 

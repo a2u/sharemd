@@ -2,6 +2,32 @@
 
 ## Installation
 
+### One-liner (recommended)
+
+Log in to your instance, open `/panel`, and copy the install command. It looks like:
+
+```bash
+curl -fsSL https://share.example.com/install?token=shmd_tk_xxxx | bash
+```
+
+This will:
+
+- Download the CLI to `~/.local/bin/sharemd`
+- Write `~/.sharemdrc` with your token and server URL
+- Source `~/.sharemdrc` from your `.bashrc` / `.zshrc`
+
+After that, open a new terminal (or `source ~/.sharemdrc`) and run `sharemd file.md`.
+
+**Dependencies:** `curl`, `jq` (`brew install jq` on macOS, `apt install jq` on Debian/Ubuntu).
+
+Set `SHAREMD_INSTALL_DIR` before running if you want a different location:
+
+```bash
+curl -fsSL https://share.example.com/install?token=... | SHAREMD_INSTALL_DIR=$HOME/bin bash
+```
+
+### Manual
+
 The `sharemd` script is a standalone bash file in `bin/`. Copy it to your PATH or run it directly:
 
 ```bash
@@ -11,8 +37,6 @@ bin/sharemd file.md
 # Or symlink to PATH
 ln -s $(pwd)/bin/sharemd /usr/local/bin/sharemd
 ```
-
-**Dependencies:** `curl`, `jq`
 
 ## Usage
 

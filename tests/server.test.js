@@ -479,3 +479,35 @@ describe("denied page", () => {
     assert.match(res.html, /cd \//);
   });
 });
+
+describe("install endpoints", () => {
+  it("GET /install with valid token returns bash script with token baked in", async () => {
+    const res = await req("GET", "/install?token=" + TOKEN, null, false);
+    assert.equal(res.status, 200);
+    assert.match(res.html, /^#!\/usr\/bin\/env bash/);
+    assert.ok(res.html.includes(`SHAREMD_TOKEN="${TOKEN}"`));
+    assert.ok(res.html.includes(`SHAREMD_URL="${BASE}"`));
+  });
+
+  it("GET /install with no token still returns a script, but with empty token", async () => {
+    const res = await req("GET", "/install", null, false);
+    assert.equal(res.status, 200);
+    assert.ok(res.html.includes('SHAREMD_TOKEN=""'));
+    assert.match(res.html, /missing token/);
+  });
+
+  it("GET /install rejects shell-injection attempts in token", async () => {
+    const bad = encodeURIComponent('abc"; rm -rf /; echo "');
+    const res = await req("GET", "/install?token=" + bad, null, false);
+    assert.equal(res.status, 200);
+    assert.ok(res.html.includes('SHAREMD_TOKEN=""'), "malformed token must be discarded");
+    assert.ok(!res.html.includes("rm -rf"));
+  });
+
+  it("GET /install/cli returns the bash CLI source", async () => {
+    const res = await req("GET", "/install/cli", null, false);
+    assert.equal(res.status, 200);
+    assert.match(res.html, /^#!\/usr\/bin\/env bash/);
+    assert.match(res.html, /Usage: sharemd/);
+  });
+});
