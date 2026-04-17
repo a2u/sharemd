@@ -143,7 +143,7 @@ Check which version is running:
 
 ```bash
 curl http://localhost:3737/health
-# → {"status":"ok","uptime":12,"version":"0.9.0"}
+# → {"status":"ok","uptime":12,"version":"1.0.0"}
 ```
 
 The version number is also shown in the footer of the landing page.
@@ -151,7 +151,7 @@ The version number is also shown in the footer of the landing page.
 To pin a specific version instead of always tracking `latest`, edit `docker-compose.yml`:
 
 ```yaml
-    image: ghcr.io/a2u/sharemd:0.9.0
+    image: ghcr.io/a2u/sharemd:1.0.0
 ```
 
 ## Install the CLI

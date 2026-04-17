@@ -1,7 +1,7 @@
 {
   "name": "sharemd",
   "description": "Share markdown files as rendered web pages. Invokes the sharemd CLI to upload and returns a public URL.",
-  "version": "0.9.0",
+  "version": "1.0.0",
   "author": {
     "name": "sharemd"
   },

@@ -8,7 +8,7 @@ A multi-arch image (`amd64` + `arm64`) is published to GHCR on every push to `ma
 
 ```
 ghcr.io/a2u/sharemd:latest
-ghcr.io/a2u/sharemd:0.9.0   # specific version
+ghcr.io/a2u/sharemd:1.0.0   # specific version
 ghcr.io/a2u/sharemd:sha-<commit>
 ```
 
@@ -69,7 +69,7 @@ The container includes a built-in health probe that Docker checks every 30s:
 
 ```bash
 curl http://localhost:3737/health
-# → {"status":"ok","uptime":42,"version":"0.9.0"}
+# → {"status":"ok","uptime":42,"version":"1.0.0"}
 ```
 
 The same version is shown in the landing-page footer.
