@@ -206,13 +206,16 @@ See [docs/api.md](docs/api.md) for the full API reference.
 - Dark/light theme toggle (persisted in localStorage)
 - Sticky header with clickable path breadcrumb
 - Raw markdown view (`?raw`)
+- In-page delete button (owner only) with confirmation modal
 - Google OAuth login + auto-registration
-- User panel with API token and storage usage
+- Registration allowlist by email/domain (`ALLOWED_EMAILS`)
+- User panel with storage bar, file browser (live search + pagination), and one-line CLI installer
+- One-liner install: `curl … | bash` drops the CLI with token pre-configured
 - Per-user storage quotas
-- Directory uploads with hierarchy
+- Directory uploads with hierarchy preserved
 - Duplicate detection with overwrite prompt
 - AI skill for agent integration
-- Docker deployment with health checks
+- Docker deployment with health checks and multi-arch GHCR image
 
 ## Configuration
 
@@ -230,7 +233,7 @@ See [docs/api.md](docs/api.md) for the full API reference.
 ## Tests
 
 ```bash
-npm test  # 37 tests
+npm test  # 63 tests
 ```
 
 ## Documentation

@@ -13,6 +13,7 @@ const { version: VERSION } = require("./package.json");
 
 const PORT = process.env.PORT || 3737;
 const SUPERADMIN_ID = 1;
+const PANEL_PAGE_SIZE = 50;
 const BASE_URL = (process.env.BASE_URL || `http://localhost:${PORT}`).replace(
   /\/$/,
   ""
@@ -231,11 +232,28 @@ function deniedHtml() {
     .replace(/\{\{ADMIN_CONTACT\}\}/g, adminContact);
 }
 
-function panelHtml(email, token, usedBytes, limitMb) {
+function panelHtml(email, token, usedBytes, limitMb, userId, initial) {
   const limitBytes = limitMb * 1024 * 1024;
   const pct = limitBytes > 0 ? Math.min(100, (usedBytes / limitBytes) * 100).toFixed(1) : 0;
   const barWidth = Math.min(100, Math.round(pct));
   const installCmd = `curl -fsSL "${BASE_URL}/install?token=${token}" | bash`;
+  const prefix = urlPrefix(userId);
+  const files = initial.files;
+  const total = initial.total;
+  const totalPages = initial.totalPages;
+
+  const filesHtml = files.length === 0
+    ? `<div class="files-empty">no files yet. try: <span class="value">sharemd file.md</span></div>`
+    : `<ul class="files-ul">${files.map((f) => {
+        const parts = f.path.split("/");
+        const name = parts.pop();
+        const dirPfx = parts.length ? parts.join("/") + "/" : "";
+        const href = `${prefix}/${f.path.split("/").map(encodeURIComponent).join("/")}`;
+        return `<li><a href="${escapeHtml(href)}" title="${escapeHtml(f.path)}">` +
+          `<span class="files-path"><span class="files-dir">${escapeHtml(dirPfx)}</span><span class="files-name">${escapeHtml(name)}</span></span>` +
+          `<span class="files-size">${formatBytes(f.size)}</span>` +
+          `</a></li>`;
+      }).join("")}</ul>`;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -286,22 +304,135 @@ function panelHtml(email, token, usedBytes, limitMb) {
       margin-top: 0.6rem;
     }
     .install-body[hidden] { display: none; }
+    .snippet-row {
+      display: flex;
+      align-items: stretch;
+      background: #141414;
+      border: 1px solid #222;
+      border-radius: 4px;
+      overflow: hidden;
+    }
     .snippet {
-      display: block;
-      padding: 0.6rem 0.8rem;
+      flex: 1;
+      min-width: 0;
+      padding: 0.55rem 0.75rem;
+      background: transparent;
+      color: #fff;
+      font-family: inherit;
+      font-size: 0.75rem;
+      line-height: 1.5;
+      white-space: nowrap;
+      overflow-x: auto;
+      overflow-y: hidden;
+      user-select: all;
+      cursor: text;
+      scrollbar-width: thin;
+      scrollbar-color: #2a2a2a transparent;
+    }
+    .snippet::-webkit-scrollbar { height: 4px; }
+    .snippet::-webkit-scrollbar-track { background: transparent; }
+    .snippet::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
+    .copy-btn {
+      flex-shrink: 0;
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 36px;
+      background: #1a1a1a;
+      border: none;
+      border-left: 1px solid #222;
+      color: #8a8a8a;
+      cursor: pointer;
+      font-family: inherit;
+      padding: 0;
+      transition: background 0.15s, color 0.15s;
+    }
+    .copy-btn:hover { background: #222; color: #fff; }
+    .copy-btn:active { background: #111; }
+    .copy-btn.copied { color: #7ee787; }
+    .copy-btn svg { display: block; }
+    .hint { color: #8a8a8a; font-size: 0.75rem; margin-top: 0.4rem; }
+    .files-header {
+      display: flex; align-items: center; gap: 0.75rem;
+      justify-content: space-between;
+      margin-bottom: 0.3rem;
+    }
+    .files-search {
       background: #141414;
       border: 1px solid #222;
       border-radius: 4px;
       color: #fff;
       font-family: inherit;
       font-size: 0.75rem;
-      line-height: 1.5;
-      word-break: break-all;
-      white-space: pre-wrap;
-      user-select: all;
-      cursor: text;
+      padding: 0.3rem 0.5rem;
+      width: 55%;
+      max-width: 260px;
+      outline: none;
+      transition: border-color 0.15s;
     }
-    .hint { color: #666; font-size: 0.75rem; margin-top: 0.4rem; }
+    .files-search::placeholder { color: #555; }
+    .files-search:focus { border-color: #444; }
+    .files-search::-webkit-search-cancel-button {
+      -webkit-appearance: none;
+      height: 0.7rem; width: 0.7rem;
+      background: #666;
+      mask-image: radial-gradient(circle, transparent 45%, #000 46%);
+      cursor: pointer;
+    }
+    .files-box {
+      max-height: 320px;
+      overflow-y: auto;
+      background: #141414;
+      border: 1px solid #222;
+      border-radius: 4px;
+    }
+    .files-box::-webkit-scrollbar { width: 6px; }
+    .files-box::-webkit-scrollbar-track { background: transparent; }
+    .files-box::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 3px; }
+    .files-box::-webkit-scrollbar-thumb:hover { background: #3a3a3a; }
+    .files-ul { list-style: none; margin: 0; padding: 0; }
+    .files-ul li + li { border-top: 1px solid #1a1a1a; }
+    .files-ul a {
+      display: flex; justify-content: space-between; align-items: baseline; gap: 1rem;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.8rem;
+      text-decoration: none;
+      color: #aaa;
+    }
+    .files-ul a:hover { background: #1a1a1a; }
+    .files-ul a:hover .files-name { color: #d97757; }
+    .files-path {
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      min-width: 0; flex: 1;
+    }
+    .files-dir { color: #666; }
+    .files-name { color: #fff; }
+    .files-size { color: #666; font-size: 0.7rem; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+    .files-empty {
+      padding: 1rem 0.75rem;
+      font-size: 0.8rem;
+      color: #666;
+      text-align: center;
+    }
+    .files-footer {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+      font-size: 0.75rem;
+    }
+    .files-footer[hidden] { display: none; }
+    .page-btn {
+      background: none;
+      border: 1px solid #222;
+      border-radius: 4px;
+      color: #aaa;
+      font-family: inherit;
+      font-size: 0.75rem;
+      padding: 0.25rem 0.6rem;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .page-btn:hover:not(:disabled) { color: #fff; border-color: #333; }
+    .page-btn:disabled { color: #444; border-color: #1a1a1a; cursor: not-allowed; }
+    .page-info { color: #666; font-variant-numeric: tabular-nums; }
     .nav { margin-top: 2rem; font-size: 0.8rem; display: flex; gap: 1.5rem; }
     .nav a { color: #666; text-decoration: none; }
     .nav a:hover { color: #fff; }
@@ -320,12 +451,32 @@ function panelHtml(email, token, usedBytes, limitMb) {
       <div class="bar-bg"><div class="bar-fill" style="width:${barWidth}%"></div></div>
     </div>
     <div class="field">
+      <div class="files-header">
+        <span class="label">files <span id="filesCount">(${total})</span></span>
+        <input type="search" id="searchInput" class="files-search" placeholder="search…" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="files-box" id="filesBox">${filesHtml}</div>
+      <div class="files-footer" id="filesFooter"${totalPages > 1 ? "" : " hidden"}>
+        <button class="page-btn" id="prevBtn" disabled>&larr; prev</button>
+        <span class="page-info" id="pageInfo">${initial.page} / ${totalPages}</span>
+        <button class="page-btn" id="nextBtn"${totalPages > 1 ? "" : " disabled"}>next &rarr;</button>
+      </div>
+    </div>
+    <div class="field">
       <button class="reveal-btn" type="button" onclick="toggleInstall()" aria-expanded="false" aria-controls="installBody">
         <span><span class="chev">&gt;</span> install cli</span>
         <span class="copy-status" id="copyStatus"></span>
       </button>
       <div class="install-body" id="installBody" hidden>
-        <code class="snippet" id="installSnippet">${escapeHtml(installCmd)}</code>
+        <div class="snippet-row">
+          <code class="snippet" id="installSnippet">${escapeHtml(installCmd)}</code>
+          <button class="copy-btn" id="copyBtn" type="button" aria-label="Copy install command" title="Copy to clipboard">
+            <svg id="copyIcon" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="5" y="5" width="9" height="9" rx="1.5"/>
+              <path d="M11 3H3.5A1.5 1.5 0 0 0 2 4.5V12"/>
+            </svg>
+          </button>
+        </div>
         <div class="hint">Run once on any machine. Requires <span class="value">curl</span> and <span class="value">jq</span>. After install: <span class="value">sharemd file.md</span></div>
       </div>
     </div>
@@ -346,11 +497,28 @@ function panelHtml(email, token, usedBytes, limitMb) {
         statusTimer = setTimeout(() => { el.textContent = ""; el.className = "copy-status"; }, 2500);
       }
     }
+    const COPY_ICON = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M11 3H3.5A1.5 1.5 0 0 0 2 4.5V12"/></svg>';
+    const CHECK_ICON = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3 3L13 4.5"/></svg>';
+    let copyBtnTimer = null;
+    function flashCopyBtn(ok) {
+      const btn = document.getElementById("copyBtn");
+      if (!btn) return;
+      if (ok) {
+        btn.innerHTML = CHECK_ICON;
+        btn.classList.add("copied");
+      }
+      if (copyBtnTimer) clearTimeout(copyBtnTimer);
+      copyBtnTimer = setTimeout(function () {
+        btn.innerHTML = COPY_ICON;
+        btn.classList.remove("copied");
+      }, 1500);
+    }
     async function copyCmd() {
       try {
         if (navigator.clipboard && window.isSecureContext) {
           await navigator.clipboard.writeText(INSTALL_CMD);
           setStatus("copied", "ok");
+          flashCopyBtn(true);
           return;
         }
       } catch (_) {}
@@ -364,6 +532,7 @@ function panelHtml(email, token, usedBytes, limitMb) {
         const ok = document.execCommand("copy");
         document.body.removeChild(ta);
         setStatus(ok ? "copied" : "select and copy manually", ok ? "ok" : "warn");
+        flashCopyBtn(ok);
       } catch (_) {
         setStatus("select and copy manually", "warn");
       }
@@ -382,6 +551,89 @@ function panelHtml(email, token, usedBytes, limitMb) {
       btn.setAttribute("aria-expanded", "true");
       copyCmd();
     }
+    document.addEventListener("DOMContentLoaded", function () {
+      const copyBtn = document.getElementById("copyBtn");
+      if (copyBtn) copyBtn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        copyCmd();
+      });
+    });
+
+    // --- Files: search + pagination ---
+    const USER_PREFIX = ${JSON.stringify(prefix)};
+    const PAGE_LIMIT = ${PANEL_PAGE_SIZE};
+    let currentPage = ${initial.page};
+    let currentQuery = "";
+    let searchTimer = null;
+    let inflight = 0;
+
+    function esc(s) {
+      return String(s)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    }
+    function fmtBytes(b) {
+      if (b < 1024) return b + " B";
+      if (b < 1024 * 1024) return (b / 1024).toFixed(1) + " KB";
+      return (b / (1024 * 1024)).toFixed(1) + " MB";
+    }
+    function renderList(data, query) {
+      const box = document.getElementById("filesBox");
+      document.getElementById("filesCount").textContent = "(" + data.total + ")";
+      if (data.files.length === 0) {
+        box.innerHTML = query
+          ? '<div class="files-empty">no matches for "' + esc(query) + '"</div>'
+          : '<div class="files-empty">no files yet. try: <span class="value">sharemd file.md</span></div>';
+      } else {
+        const items = data.files.map(function (f) {
+          const parts = f.path.split("/");
+          const name = parts.pop();
+          const dirPfx = parts.length ? parts.join("/") + "/" : "";
+          const href = USER_PREFIX + "/" + f.path.split("/").map(encodeURIComponent).join("/");
+          return '<li><a href="' + esc(href) + '" title="' + esc(f.path) + '">' +
+            '<span class="files-path"><span class="files-dir">' + esc(dirPfx) + '</span><span class="files-name">' + esc(name) + '</span></span>' +
+            '<span class="files-size">' + fmtBytes(f.size) + '</span>' +
+            '</a></li>';
+        }).join("");
+        box.innerHTML = '<ul class="files-ul">' + items + '</ul>';
+      }
+      currentPage = data.page;
+      const footer = document.getElementById("filesFooter");
+      if (data.totalPages > 1) {
+        footer.hidden = false;
+        document.getElementById("pageInfo").textContent = data.page + " / " + data.totalPages;
+        document.getElementById("prevBtn").disabled = data.page <= 1;
+        document.getElementById("nextBtn").disabled = data.page >= data.totalPages;
+      } else {
+        footer.hidden = true;
+      }
+    }
+    async function loadFiles(page, query) {
+      const myTurn = ++inflight;
+      const params = new URLSearchParams({ page: String(page), limit: String(PAGE_LIMIT) });
+      if (query) params.set("q", query);
+      try {
+        const r = await fetch("/api/panel/files?" + params.toString(), { credentials: "same-origin" });
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        const j = await r.json();
+        if (myTurn !== inflight) return; // stale
+        renderList(j, query);
+        document.getElementById("filesBox").scrollTop = 0;
+      } catch (_) {}
+    }
+    document.getElementById("searchInput").addEventListener("input", function (e) {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(function () {
+        currentQuery = e.target.value;
+        loadFiles(1, currentQuery);
+      }, 180);
+    });
+    document.getElementById("prevBtn").addEventListener("click", function () {
+      if (currentPage > 1) loadFiles(currentPage - 1, currentQuery);
+    });
+    document.getElementById("nextBtn").addEventListener("click", function () {
+      loadFiles(currentPage + 1, currentQuery);
+    });
   </script>
 </body>
 </html>`;
@@ -681,6 +933,32 @@ function listMdFiles(dir, baseDir) {
   return results.sort();
 }
 
+function listMdFilesWithStats(dir, baseDir) {
+  const results = [];
+  let entries;
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return results;
+  }
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      results.push(...listMdFilesWithStats(full, baseDir));
+    } else if (entry.name.endsWith(".md")) {
+      try {
+        const st = fs.statSync(full);
+        results.push({
+          path: path.relative(baseDir, full).split(path.sep).join("/"),
+          size: st.size,
+          mtime: st.mtimeMs,
+        });
+      } catch {}
+    }
+  }
+  return results;
+}
+
 function dirSizeBytes(dir) {
   let total = 0;
   let entries;
@@ -698,6 +976,23 @@ function dirSizeBytes(dir) {
     }
   }
   return total;
+}
+
+function filterAndPageFiles(files, query, page, limit) {
+  const q = String(query || "").toLowerCase().trim();
+  const filtered = q
+    ? files.filter((f) => f.path.toLowerCase().includes(q))
+    : files;
+  const total = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const start = (safePage - 1) * limit;
+  return {
+    files: filtered.slice(start, start + limit),
+    total,
+    page: safePage,
+    totalPages,
+  };
 }
 
 function formatBytes(bytes) {
@@ -1200,6 +1495,21 @@ app.get("/logout", (req, res) => {
   res.redirect("/");
 });
 
+// Panel file list (session auth — used by /panel for search/pagination)
+app.get("/api/panel/files", (req, res) => {
+  const session = getSession(req);
+  if (!session) return res.status(401).json({ error: "not authenticated" });
+
+  const dir = userDir(session.userId);
+  const all = listMdFilesWithStats(dir, dir).sort((a, b) => b.mtime - a.mtime);
+
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 50));
+  const paged = filterAndPageFiles(all, req.query.q, page, limit);
+
+  res.json({ ...paged, limit });
+});
+
 app.get("/panel", (req, res) => {
   const session = getSession(req);
   if (!session) return res.redirect("/login");
@@ -1209,9 +1519,12 @@ app.get("/panel", (req, res) => {
   const email = user ? user.email : session.email;
   const token = user ? user.token : "—";
   const limitMb = user ? user.storageLimitMb : 20;
-  const usedBytes = dirSizeBytes(userDir(session.userId));
+  const dir = userDir(session.userId);
+  const all = listMdFilesWithStats(dir, dir).sort((a, b) => b.mtime - a.mtime);
+  const usedBytes = all.reduce((sum, f) => sum + f.size, 0);
+  const initial = filterAndPageFiles(all, "", 1, PANEL_PAGE_SIZE);
 
-  res.send(panelHtml(email, token, usedBytes, limitMb));
+  res.send(panelHtml(email, token, usedBytes, limitMb, session.userId, initial));
 });
 
 // Health check

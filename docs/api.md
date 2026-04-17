@@ -1,8 +1,17 @@
 # API Reference
 
-All API endpoints require authentication via `Authorization: Bearer <token>` header.
-
 Base URL: configured via `BASE_URL` env var (default `http://localhost:3737`).
+
+## Authentication
+
+Two mechanisms, all API endpoints accept either:
+
+- **Bearer token** — `Authorization: Bearer <token>`. Token is in `data/users.json`; web users can copy their token from `/panel`. Used by the CLI and external agents.
+- **Session cookie** — `sid=<signed>`. Set on Google OAuth login (`/auth/google/callback`). Used by the web UI (e.g. the delete button on file pages, the panel file list). HttpOnly, SameSite=Lax.
+
+Token check is timing-safe. A request providing neither — or a bad token — returns `401`.
+
+The URL prefix returned by upload endpoints depends on the user: superadmin (`id=1`) files live at the site root (`/hello.md`); other users' files live under `/<userId>/` (`/2/hello.md`).
 
 ---
 
@@ -30,7 +39,7 @@ Upload a single markdown file.
 
 ```json
 {
-  "url": "http://localhost:3737/1/my-doc.md"
+  "url": "http://localhost:3737/my-doc.md"
 }
 ```
 
@@ -39,7 +48,17 @@ Upload a single markdown file.
 ```json
 {
   "exists": true,
-  "url": "http://localhost:3737/1/my-doc.md"
+  "url": "http://localhost:3737/my-doc.md"
+}
+```
+
+**Response (413 — storage limit exceeded):**
+
+```json
+{
+  "error": "storage limit exceeded",
+  "used": "19.8 MB",
+  "limit": "20 MB"
 }
 ```
 
@@ -74,7 +93,7 @@ Path validation: rejects absolute paths and `..` segments.
 
 ```json
 {
-  "url": "http://localhost:3737/1/docs"
+  "url": "http://localhost:3737/docs"
 }
 ```
 
@@ -84,7 +103,7 @@ Path validation: rejects absolute paths and `..` segments.
 {
   "exists": true,
   "files": ["docs/guide.md"],
-  "url": "http://localhost:3737/1/docs"
+  "url": "http://localhost:3737/docs"
 }
 ```
 
@@ -92,18 +111,18 @@ Path validation: rejects absolute paths and `..` segments.
 
 ## GET /api/files
 
-List all uploaded files for the current user.
+List all uploaded files for the current user, flat array of paths sorted alphabetically.
 
-**Request:** No body. Auth header only.
+**Request:** No body. Auth required.
 
 **Response (200):**
 
 ```json
 {
   "files": [
-    "hello.md",
+    "docs/faq.md",
     "docs/guide.md",
-    "docs/faq.md"
+    "hello.md"
   ]
 }
 ```
@@ -126,7 +145,7 @@ Delete a file or directory.
 |-------|------|----------|-------------|
 | `path` | string | yes | File or directory path to delete |
 
-When deleting a directory, all files inside are removed recursively.
+When deleting a directory, all files inside are removed recursively. Accepts both Bearer token and session cookie — the in-browser delete button on rendered file pages uses the session cookie.
 
 **Response (200):**
 
@@ -147,16 +166,64 @@ When deleting a directory, all files inside are removed recursively.
 
 ---
 
+## GET /api/panel/files
+
+Paginated + searchable file list for the logged-in user. Used by the `/panel` UI for client-side navigation without full page reload. **Session cookie auth only** (not Bearer) — this is a web-UI endpoint.
+
+**Query parameters:**
+
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `q` | string | — | Case-insensitive substring match against each file's path |
+| `page` | int | `1` | 1-based page number. Out-of-range values clamp to the last page |
+| `limit` | int | `50` | Items per page. Clamped to `[1, 200]` |
+
+**Response (200):**
+
+```json
+{
+  "files": [
+    { "path": "docs/guide.md", "size": 2048, "mtime": 1744722340000 },
+    { "path": "hello.md",      "size": 128,  "mtime": 1744720000000 }
+  ],
+  "total": 2,
+  "page": 1,
+  "totalPages": 1,
+  "limit": 50,
+  "userPrefix": ""
+}
+```
+
+Files are always sorted by `mtime` descending (newest first). `userPrefix` is `""` for superadmin and `/<userId>` for other users — use it to build hrefs like `userPrefix + "/" + path`.
+
+**Response (401):**
+
+```json
+{ "error": "not authenticated" }
+```
+
+---
+
 ## Public Routes (no auth)
 
-These routes are accessed by anyone with the URL.
+These routes serve content to anyone with the URL.
 
 | Route | Description |
 |-------|-------------|
 | `GET /` | Landing page |
-| `GET /:userId/:file.md` | Renders markdown as styled HTML with theme toggle |
-| `GET /:userId/:dir/` | Lists `.md` files in the directory |
-| `GET /:userId` | Returns 404 (no public user listing) |
+| `GET /:file.md` | Superadmin (`id=1`) file, rendered |
+| `GET /:file.md?raw` | Raw markdown as `text/plain` |
+| `GET /:dir/` | Superadmin directory listing |
+| `GET /:userId/:path.md` | Other users' file, rendered |
+| `GET /:userId/:dir/` | Other users' directory listing |
+| `GET /:userId` | Returns 404 (no public user-root listing) |
+| `GET /health` | JSON `{status, uptime, version}` |
+| `GET /install?token=<tok>` | Bash installer script with the given token baked in. Token must match `[A-Za-z0-9_]{8,128}`; otherwise an empty token is emitted |
+| `GET /install/cli` | Raw `bin/sharemd` bash source (fetched by the installer) |
+| `GET /login` | Redirects to Google OAuth (or `/panel` if already signed in) |
+| `GET /login/denied` | 403 page for emails not in `ALLOWED_EMAILS` |
+| `GET /panel` | Authenticated user panel (storage, file list with search/pagination, install one-liner). Redirects to `/login` if no session |
+| `GET /logout` | Clears session cookie, redirects to `/` |
 
 ---
 
@@ -173,7 +240,7 @@ All errors return JSON:
 | Status | Meaning |
 |--------|---------|
 | 400 | Bad request (missing fields, invalid path) |
-| 401 | Missing or invalid token |
+| 401 | Missing or invalid token / session |
 | 404 | File/directory not found |
 | 409 | File already exists (use `overwrite: true`) |
 | 413 | Storage limit exceeded |

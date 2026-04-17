@@ -2,15 +2,45 @@
 
 ## Docker
 
-### Build and run
+### Option A — pull the prebuilt image (recommended)
+
+A multi-arch image (`amd64` + `arm64`) is published to GHCR on every push to `main` and on version tags:
+
+```
+ghcr.io/a2u/sharemd:latest
+ghcr.io/a2u/sharemd:0.9.0   # specific version
+ghcr.io/a2u/sharemd:sha-<commit>
+```
+
+Minimal compose file (`docker-compose.yml`):
+
+```yaml
+services:
+  sharemd:
+    image: ghcr.io/a2u/sharemd:latest
+    container_name: sharemd
+    restart: unless-stopped
+    ports:
+      - "3737:3737"
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - .env
+```
+
+Bring it up:
 
 ```bash
 docker compose up -d
 ```
 
-This builds the image and starts the container. Data is persisted in `./data/` via volume mount.
+### Option B — build from source
 
-### Manual Docker build
+```bash
+docker compose up -d  # uses the Dockerfile in the repo
+```
+
+Or manually:
 
 ```bash
 docker build -t sharemd .
@@ -23,16 +53,26 @@ docker run -d \
   sharemd
 ```
 
+### Updating
+
+```bash
+cd /path/to/sharemd
+docker compose pull
+docker compose up -d
+```
+
+Data in `./data/` is on a host volume — the container can be recreated freely without losing files, tokens, or the session secret.
+
 ### Health check
 
-The container includes a built-in health check:
+The container includes a built-in health probe that Docker checks every 30s:
 
 ```bash
 curl http://localhost:3737/health
-# → {"status":"ok","uptime":42}
+# → {"status":"ok","uptime":42,"version":"0.9.0"}
 ```
 
-Docker checks this automatically every 30s.
+The same version is shown in the landing-page footer.
 
 ## Configuration
 
@@ -87,11 +127,14 @@ data/
 
 Back up `data/` to preserve everything. The `.session-secret` file is auto-generated on first run — if you lose it, existing session cookies become invalid (users just re-login).
 
-## Reverse proxy (nginx)
+## Reverse proxy
+
+### nginx
 
 ```nginx
 server {
     server_name share.example.com;
+    client_max_body_size 50M;
 
     location / {
         proxy_pass http://127.0.0.1:3737;
@@ -103,7 +146,19 @@ server {
 }
 ```
 
-For HTTPS, use certbot: `certbot --nginx -d share.example.com`
+For HTTPS, use certbot: `certbot --nginx -d share.example.com`.
+
+### Caddy
+
+Caddy handles TLS automatically via Let's Encrypt. A single block in `/etc/caddy/Caddyfile` is enough:
+
+```
+share.example.com {
+    reverse_proxy 127.0.0.1:3737
+}
+```
+
+Then `systemctl reload caddy`.
 
 ## Without Docker
 

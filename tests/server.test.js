@@ -7,7 +7,8 @@ const path = require("node:path");
 // Use a temp data dir and different port for tests
 const TEST_PORT = 4747;
 const TEST_DATA = path.join(__dirname, ".test-data");
-const TOKEN = "shmd_tk_9f4a2b7e1c8d3056";
+// Arbitrary fixture value — isolated to TEST_DATA, never shared with real users.json
+const TOKEN = "shmd_tk_test_superadmin_000000";
 
 process.env.PORT = TEST_PORT;
 process.env.DATA_DIR = TEST_DATA;
@@ -57,6 +58,10 @@ function req(method, urlPath, body, token, extra) {
     if (payload) r.write(payload);
     r.end();
   });
+}
+
+function sidCookie(userId = SUPERADMIN_ID, email = "test@test.com") {
+  return `sid=${createSession({ id: userId, email })}`;
 }
 
 function cleanData() {
@@ -259,9 +264,8 @@ describe("DELETE /api/delete", () => {
 
   it("accepts session cookie as auth", async () => {
     await req("POST", "/api/upload", { content: "# Y", filename: "y.md" });
-    const sid = createSession({ id: SUPERADMIN_ID, email: "test@test.com" });
     const res = await req("DELETE", "/api/delete", { path: "y.md" }, false, {
-      cookie: `sid=${sid}`,
+      cookie: sidCookie(),
     });
     assert.equal(res.status, 200);
     assert.equal(res.body.deleted, 1);
@@ -271,8 +275,7 @@ describe("DELETE /api/delete", () => {
 describe("delete button visibility", () => {
   it("is shown on owner's file page when session matches", async () => {
     await req("POST", "/api/upload", { content: "# own", filename: "own.md" });
-    const sid = createSession({ id: SUPERADMIN_ID, email: "test@test.com" });
-    const res = await req("GET", "/own.md", null, false, { cookie: `sid=${sid}` });
+    const res = await req("GET", "/own.md", null, false, { cookie: sidCookie() });
     assert.equal(res.status, 200);
     assert.match(res.html, /openDeleteModal/);
     assert.match(res.html, /Delete this file\?/);
@@ -295,8 +298,7 @@ describe("delete button visibility", () => {
     await req("POST", "/api/upload", { content: "# superadmin", filename: "admin.md" });
 
     // Visit as user 2
-    const sid = createSession({ id: 2, email: "u2@test.com" });
-    const res = await req("GET", "/admin.md", null, false, { cookie: `sid=${sid}` });
+    const res = await req("GET", "/admin.md", null, false, { cookie: sidCookie(2, "u2@test.com") });
     assert.equal(res.status, 200);
     assert.ok(!res.html.includes("openDeleteModal"));
   });
@@ -381,8 +383,7 @@ describe("login/panel/logout", () => {
   });
 
   it("/panel renders with install toggle but no standalone token field", async () => {
-    const sid = createSession({ id: SUPERADMIN_ID, email: "test@test.com" });
-    const res = await req("GET", "/panel", null, false, { cookie: `sid=${sid}` });
+    const res = await req("GET", "/panel", null, false, { cookie: sidCookie() });
     assert.equal(res.status, 200);
     assert.match(res.html, /toggleInstall/);
     assert.match(res.html, /install cli/);
@@ -396,6 +397,50 @@ describe("login/panel/logout", () => {
     const res = await req("GET", "/panel", null, false);
     assert.equal(res.status, 302);
     assert.equal(res.headers.location, "/login");
+  });
+
+  it("/panel shows empty files state when user has no files", async () => {
+    const res = await req("GET", "/panel", null, false, { cookie: sidCookie() });
+    assert.equal(res.status, 200);
+    assert.match(res.html, /id="filesCount">\(0\)</);
+    assert.match(res.html, /no files yet/);
+    assert.match(res.html, /id="searchInput"/);
+  });
+
+  it("/panel lists user files with links and sizes, newest first", async () => {
+    // Superadmin has no /1/ prefix in URLs
+    await req("POST", "/api/upload", { content: "# old", filename: "old.md" });
+    await new Promise((r) => setTimeout(r, 20));
+    await req("POST", "/api/upload", { content: "# nested", filename: "docs/guide.md" });
+    await new Promise((r) => setTimeout(r, 20));
+    await req("POST", "/api/upload", { content: "# recent", filename: "recent.md" });
+
+    const res = await req("GET", "/panel", null, false, { cookie: sidCookie() });
+    assert.equal(res.status, 200);
+    assert.match(res.html, /id="filesCount">\(3\)</);
+    assert.match(res.html, /href="\/recent\.md"/);
+    assert.match(res.html, /href="\/old\.md"/);
+    assert.match(res.html, /href="\/docs\/guide\.md"/);
+    // Dir prefix rendered muted
+    assert.match(res.html, /class="files-dir">docs\//);
+    // Newest first: "recent.md" should appear before "old.md" in HTML
+    assert.ok(res.html.indexOf("recent.md") < res.html.indexOf("old.md"));
+    // Pagination footer hidden when total ≤ limit
+    assert.match(res.html, /id="filesFooter" hidden/);
+  });
+
+  it("/panel prefixes links with /:userId for non-superadmin users", async () => {
+    // Seed a second user
+    const users = JSON.parse(fs.readFileSync(path.join(TEST_DATA, "users.json"), "utf-8"));
+    const second = { id: 42, email: "u42@test.com", token: "shmd_tk_aaaaaaaaaaaaaaaa", registeredAt: "2026-04-10T00:00:00.000Z", storageLimitMb: 20 };
+    users.push(second);
+    fs.writeFileSync(path.join(TEST_DATA, "users.json"), JSON.stringify(users));
+    fs.mkdirSync(path.join(TEST_DATA, "42"), { recursive: true });
+    fs.writeFileSync(path.join(TEST_DATA, "42", "note.md"), "# hi");
+
+    const res = await req("GET", "/panel", null, false, { cookie: sidCookie(42, "u42@test.com") });
+    assert.equal(res.status, 200);
+    assert.match(res.html, /href="\/42\/note\.md"/);
   });
 
   it("/logout redirects to / and clears cookie", async () => {
@@ -568,5 +613,109 @@ describe("install endpoints", () => {
     assert.equal(res.status, 200);
     assert.match(res.html, /^#!\/usr\/bin\/env bash/);
     assert.match(res.html, /Usage: sharemd/);
+  });
+});
+
+// --- Panel files API (search + pagination) ---
+
+describe("panel files API", () => {
+  it("rejects unauthenticated requests with 401", async () => {
+    const res = await req("GET", "/api/panel/files", null, false);
+    assert.equal(res.status, 401);
+    assert.equal(res.body.error, "not authenticated");
+  });
+
+  it("returns empty payload for user with no files", async () => {
+    const res = await req("GET", "/api/panel/files", null, false, { cookie: sidCookie() });
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body.files, []);
+    assert.equal(res.body.total, 0);
+    assert.equal(res.body.page, 1);
+    assert.equal(res.body.totalPages, 1);
+    assert.equal(res.body.limit, 50);
+  });
+
+  it("returns files sorted by mtime descending (newest first)", async () => {
+    await req("POST", "/api/upload", { content: "# a", filename: "a.md" });
+    await new Promise((r) => setTimeout(r, 15));
+    await req("POST", "/api/upload", { content: "# b", filename: "b.md" });
+    await new Promise((r) => setTimeout(r, 15));
+    await req("POST", "/api/upload", { content: "# c", filename: "c.md" });
+
+    const res = await req("GET", "/api/panel/files", null, false, { cookie: sidCookie() });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.total, 3);
+    assert.deepEqual(res.body.files.map((f) => f.path), ["c.md", "b.md", "a.md"]);
+    // Each file has size and mtime
+    for (const f of res.body.files) {
+      assert.equal(typeof f.size, "number");
+      assert.equal(typeof f.mtime, "number");
+    }
+  });
+
+  it("filters files by case-insensitive substring in path", async () => {
+    await req("POST", "/api/upload", { content: "# r", filename: "README.md" });
+    await req("POST", "/api/upload", { content: "# n", filename: "notes/todo.md" });
+    await req("POST", "/api/upload", { content: "# g", filename: "docs/guide.md" });
+
+    const res = await req("GET", "/api/panel/files?q=DOC", null, false, { cookie: sidCookie() });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.total, 1);
+    assert.equal(res.body.files[0].path, "docs/guide.md");
+
+    const none = await req("GET", "/api/panel/files?q=zzz", null, false, { cookie: sidCookie() });
+    assert.equal(none.body.total, 0);
+    assert.deepEqual(none.body.files, []);
+  });
+
+  it("paginates with default limit 50 and respects ?page=", async () => {
+    // Upload 55 files so we need two pages
+    for (let i = 0; i < 55; i++) {
+      await req("POST", "/api/upload", { content: `# ${i}`, filename: `f${String(i).padStart(3, "0")}.md` });
+    }
+
+    const page1 = await req("GET", "/api/panel/files?page=1", null, false, { cookie: sidCookie() });
+    assert.equal(page1.status, 200);
+    assert.equal(page1.body.total, 55);
+    assert.equal(page1.body.totalPages, 2);
+    assert.equal(page1.body.page, 1);
+    assert.equal(page1.body.files.length, 50);
+
+    const page2 = await req("GET", "/api/panel/files?page=2", null, false, { cookie: sidCookie() });
+    assert.equal(page2.body.page, 2);
+    assert.equal(page2.body.files.length, 5);
+
+    // Out-of-range page clamps to last page
+    const page99 = await req("GET", "/api/panel/files?page=99", null, false, { cookie: sidCookie() });
+    assert.equal(page99.body.page, 2);
+  });
+
+  it("honors custom ?limit= within bounds", async () => {
+    for (let i = 0; i < 5; i++) {
+      await req("POST", "/api/upload", { content: `# ${i}`, filename: `f${i}.md` });
+    }
+    const res = await req("GET", "/api/panel/files?limit=2", null, false, { cookie: sidCookie() });
+    assert.equal(res.body.limit, 2);
+    assert.equal(res.body.totalPages, 3);
+    assert.equal(res.body.files.length, 2);
+
+    // Limit clamped to 200 max
+    const big = await req("GET", "/api/panel/files?limit=9999", null, false, { cookie: sidCookie() });
+    assert.equal(big.body.limit, 200);
+  });
+
+  it("search + pagination compose correctly", async () => {
+    // 60 "doc-*.md" and 60 "note-*.md"
+    for (let i = 0; i < 60; i++) {
+      await req("POST", "/api/upload", { content: "# d", filename: `doc-${String(i).padStart(3, "0")}.md` });
+      await req("POST", "/api/upload", { content: "# n", filename: `note-${String(i).padStart(3, "0")}.md` });
+    }
+    const res = await req("GET", "/api/panel/files?q=doc-&page=2", null, false, { cookie: sidCookie() });
+    assert.equal(res.body.total, 60);
+    assert.equal(res.body.totalPages, 2);
+    assert.equal(res.body.page, 2);
+    assert.equal(res.body.files.length, 10);
+    // All results match query
+    for (const f of res.body.files) assert.ok(f.path.includes("doc-"));
   });
 });
