@@ -214,6 +214,8 @@ See [docs/api.md](docs/api.md) for the full API reference.
 | `SITE_DOMAIN` | `sharemd` | Domain shown in header |
 | `GOOGLE_CLIENT_ID` | — | Google OAuth client ID |
 | `GOOGLE_CLIENT_SECRET` | — | Google OAuth client secret |
+| `ALLOWED_EMAILS` | — | Registration allowlist, comma-separated. `@domain.com` or full email. Empty = allow all |
+| `ADMIN_EMAIL` | — | Admin contact shown on access-denied page |
 
 ## Tests
 

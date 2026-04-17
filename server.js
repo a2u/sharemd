@@ -21,6 +21,20 @@ const DATA_DIR = path.resolve(process.env.DATA_DIR || "./data");
 const SITE_DOMAIN = process.env.SITE_DOMAIN || "sharemd";
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "";
+const ALLOWED_EMAILS = (process.env.ALLOWED_EMAILS || "")
+  .split(",")
+  .map((s) => s.trim().toLowerCase())
+  .filter(Boolean);
+
+function isEmailAllowed(email, allowList = ALLOWED_EMAILS) {
+  if (!allowList || allowList.length === 0) return true;
+  const lower = String(email).toLowerCase();
+  const atIdx = lower.indexOf("@");
+  if (atIdx < 0) return false;
+  const domain = lower.slice(atIdx);
+  return allowList.some((p) => p === lower || p === domain);
+}
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
@@ -83,11 +97,21 @@ function pageHtml(title, bodyContent, pathSegments, rawUrl) {
 }
 
 const LANDING_TEMPLATE = fs.readFileSync(path.join(__dirname, "index.html"), "utf-8");
+const DENIED_TEMPLATE = fs.readFileSync(path.join(__dirname, "denied.html"), "utf-8");
 
 function landingHtml() {
   return LANDING_TEMPLATE
     .replace(/\{\{SITE_DOMAIN\}\}/g, escapeHtml(SITE_DOMAIN))
     .replace(/\{\{VERSION\}\}/g, escapeHtml(VERSION));
+}
+
+function deniedHtml() {
+  const adminContact = ADMIN_EMAIL
+    ? `Contact the admin to request access: <strong><a href="mailto:${escapeHtml(ADMIN_EMAIL)}">${escapeHtml(ADMIN_EMAIL)}</a></strong>`
+    : `Contact the administrator of this instance to request access.`;
+  return DENIED_TEMPLATE
+    .replace(/\{\{SITE_DOMAIN\}\}/g, escapeHtml(SITE_DOMAIN))
+    .replace(/\{\{ADMIN_CONTACT\}\}/g, adminContact);
 }
 
 function panelHtml(email, token, usedBytes, limitMb) {
@@ -810,6 +834,10 @@ app.get("/login", (req, res) => {
   res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
 });
 
+app.get("/login/denied", (req, res) => {
+  res.status(403).send(deniedHtml());
+});
+
 app.get("/auth/google/callback", async (req, res) => {
   const { code, error } = req.query;
   if (error || !code) {
@@ -845,6 +873,9 @@ app.get("/auth/google/callback", async (req, res) => {
     let user = users.find((u) => u.email === userInfo.email);
 
     if (!user) {
+      if (!isEmailAllowed(userInfo.email)) {
+        return res.redirect("/login/denied");
+      }
       const maxId = users.reduce((m, u) => Math.max(m, u.id), 0);
       user = {
         id: maxId + 1,
@@ -929,4 +960,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { createServer, DATA_DIR, SUPERADMIN_ID };
+module.exports = { createServer, DATA_DIR, SUPERADMIN_ID, isEmailAllowed };

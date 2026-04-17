@@ -50,6 +50,24 @@ cp .env.example .env
 | `SITE_DOMAIN` | No | Domain shown in header (default: `sharemd`) |
 | `GOOGLE_CLIENT_ID` | For login | Google OAuth client ID |
 | `GOOGLE_CLIENT_SECRET` | For login | Google OAuth client secret |
+| `ALLOWED_EMAILS` | No | Comma-separated registration allowlist. `@domain.com` matches whole domain; full email matches one user. Empty = allow anyone |
+| `ADMIN_EMAIL` | No | Admin contact shown on `/login/denied` |
+
+### Restricting registration
+
+To limit who can register via Google OAuth on a public instance, set `ALLOWED_EMAILS`:
+
+```
+ALLOWED_EMAILS=@cloudlinux.com,@anthropic.com,partner@gmail.com
+ADMIN_EMAIL=admin@cloudlinux.com
+```
+
+- `@domain.com` — anyone at that domain can register
+- `user@domain.com` — only that specific user
+- Multiple entries — comma-separated, mix as needed
+- Empty or unset — anyone with a Google account can register (default)
+
+Users already in `data/users.json` keep access even if you tighten the list later. Rejected logins land on `/login/denied` with the `ADMIN_EMAIL` as the contact link.
 
 ## Data persistence
 

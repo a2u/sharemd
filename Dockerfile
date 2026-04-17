@@ -5,7 +5,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
-COPY server.js index.html ./
+COPY server.js index.html denied.html ./
 COPY public/ public/
 COPY bin/ bin/
 

@@ -78,6 +78,8 @@ Server config via `.env` (loaded by dotenv). See `.env.example`:
 - `SITE_DOMAIN` — domain shown in header breadcrumb and landing page
 - `GOOGLE_CLIENT_ID` — Google OAuth client ID
 - `GOOGLE_CLIENT_SECRET` — Google OAuth client secret
+- `ALLOWED_EMAILS` — comma-separated allowlist for registration. `@domain.com` matches whole domain, full email matches one user. Empty = allow all. Only applied on new registrations; existing users in `users.json` keep access.
+- `ADMIN_EMAIL` — admin contact shown on `/login/denied` page when a user's email is not in the allowlist.
 
 User config via `data/users.json`:
 - `id` — numeric user ID (1 = superadmin)

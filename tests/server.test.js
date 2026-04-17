@@ -13,7 +13,7 @@ process.env.PORT = TEST_PORT;
 process.env.DATA_DIR = TEST_DATA;
 process.env.BASE_URL = `http://localhost:${TEST_PORT}`;
 
-const { createServer, SUPERADMIN_ID } = require("../server");
+const { createServer, SUPERADMIN_ID, isEmailAllowed } = require("../server");
 
 let server;
 const BASE = `http://localhost:${TEST_PORT}`;
@@ -432,5 +432,48 @@ describe("health check", () => {
     assert.equal(res.status, 200);
     assert.equal(res.body.status, "ok");
     assert.equal(typeof res.body.uptime, "number");
+  });
+});
+
+// --- Email allowlist ---
+
+describe("isEmailAllowed", () => {
+  it("allows any email when list is empty", () => {
+    assert.equal(isEmailAllowed("anyone@example.com", []), true);
+    assert.equal(isEmailAllowed("anyone@example.com"), true);
+  });
+
+  it("matches exact emails case-insensitively", () => {
+    const list = ["user@example.com"];
+    assert.equal(isEmailAllowed("user@example.com", list), true);
+    assert.equal(isEmailAllowed("USER@example.com", list), true);
+    assert.equal(isEmailAllowed("other@example.com", list), false);
+  });
+
+  it("matches whole domains via @domain pattern", () => {
+    const list = ["@cloudlinux.com"];
+    assert.equal(isEmailAllowed("anyone@cloudlinux.com", list), true);
+    assert.equal(isEmailAllowed("Someone@CloudLinux.com", list), true);
+    assert.equal(isEmailAllowed("anyone@other.com", list), false);
+  });
+
+  it("supports mixed domain + exact entries", () => {
+    const list = ["@cloudlinux.com", "partner@gmail.com"];
+    assert.equal(isEmailAllowed("a@cloudlinux.com", list), true);
+    assert.equal(isEmailAllowed("partner@gmail.com", list), true);
+    assert.equal(isEmailAllowed("other@gmail.com", list), false);
+  });
+
+  it("rejects malformed email when list is non-empty", () => {
+    assert.equal(isEmailAllowed("not-an-email", ["@example.com"]), false);
+  });
+});
+
+describe("denied page", () => {
+  it("GET /login/denied returns 403 and terminal-style page", async () => {
+    const res = await req("GET", "/login/denied", null, false);
+    assert.equal(res.status, 403);
+    assert.match(res.html, /access restricted/i);
+    assert.match(res.html, /cd \//);
   });
 });
