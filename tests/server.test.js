@@ -15,12 +15,12 @@ process.env.BASE_URL = `http://localhost:${TEST_PORT}`;
 process.env.ALLOWED_EMAILS = "";
 process.env.ADMIN_EMAIL = "";
 
-const { createServer, SUPERADMIN_ID, isEmailAllowed } = require("../server");
+const { createServer, SUPERADMIN_ID, isEmailAllowed, createSession } = require("../server");
 
 let server;
 const BASE = `http://localhost:${TEST_PORT}`;
 
-function req(method, urlPath, body, token) {
+function req(method, urlPath, body, token, extra) {
   return new Promise((resolve, reject) => {
     const url = new URL(urlPath, BASE);
     const opts = {
@@ -38,6 +38,9 @@ function req(method, urlPath, body, token) {
     }
     if (token !== false) {
       opts.headers["Authorization"] = `Bearer ${token || TOKEN}`;
+    }
+    if (extra && extra.cookie) {
+      opts.headers["Cookie"] = extra.cookie;
     }
     const r = http.request(opts, (res) => {
       let data = "";
@@ -252,6 +255,50 @@ describe("DELETE /api/delete", () => {
   it("requires auth", async () => {
     const res = await req("DELETE", "/api/delete", { path: "x.md" }, false);
     assert.equal(res.status, 401);
+  });
+
+  it("accepts session cookie as auth", async () => {
+    await req("POST", "/api/upload", { content: "# Y", filename: "y.md" });
+    const sid = createSession({ id: SUPERADMIN_ID, email: "test@test.com" });
+    const res = await req("DELETE", "/api/delete", { path: "y.md" }, false, {
+      cookie: `sid=${sid}`,
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.deleted, 1);
+  });
+});
+
+describe("delete button visibility", () => {
+  it("is shown on owner's file page when session matches", async () => {
+    await req("POST", "/api/upload", { content: "# own", filename: "own.md" });
+    const sid = createSession({ id: SUPERADMIN_ID, email: "test@test.com" });
+    const res = await req("GET", "/own.md", null, false, { cookie: `sid=${sid}` });
+    assert.equal(res.status, 200);
+    assert.match(res.html, /openDeleteModal/);
+    assert.match(res.html, /Delete this file\?/);
+  });
+
+  it("is hidden for anonymous viewers", async () => {
+    await req("POST", "/api/upload", { content: "# anon", filename: "anon.md" });
+    const res = await req("GET", "/anon.md", null, false);
+    assert.equal(res.status, 200);
+    assert.ok(!res.html.includes("openDeleteModal"));
+    assert.ok(!res.html.includes("Delete this file?"));
+  });
+
+  it("is hidden when logged-in viewer is not the owner", async () => {
+    // Add a second user to users.json
+    const users = JSON.parse(fs.readFileSync(path.join(TEST_DATA, "users.json"), "utf-8"));
+    users.push({ id: 2, email: "u2@test.com", token: "shmd_tk_other0000000000", registeredAt: "2026-04-09T00:00:00.000Z", storageLimitMb: 20 });
+    fs.writeFileSync(path.join(TEST_DATA, "users.json"), JSON.stringify(users));
+
+    await req("POST", "/api/upload", { content: "# superadmin", filename: "admin.md" });
+
+    // Visit as user 2
+    const sid = createSession({ id: 2, email: "u2@test.com" });
+    const res = await req("GET", "/admin.md", null, false, { cookie: `sid=${sid}` });
+    assert.equal(res.status, 200);
+    assert.ok(!res.html.includes("openDeleteModal"));
   });
 });
 

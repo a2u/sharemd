@@ -58,7 +58,7 @@ md.use(anchor, { permalink: false });
 
 // --- HTML templates ---
 
-function pageHtml(title, bodyContent, pathSegments, rawUrl) {
+function pageHtml(title, bodyContent, pathSegments, rawUrl, opts) {
   let headerLinks = `<a href="/">${escapeHtml(SITE_DOMAIN)}</a>`;
   if (pathSegments) {
     for (const seg of pathSegments) {
@@ -74,6 +74,63 @@ function pageHtml(title, bodyContent, pathSegments, rawUrl) {
     ? `<a href="${escapeHtml(rawUrl)}" class="raw-link">raw</a>`
     : "";
 
+  const deleteBtn = opts && opts.canDelete
+    ? `<button class="delete-link" onclick="openDeleteModal()" aria-label="Delete this file">delete</button>`
+    : "";
+
+  const deleteModal = opts && opts.canDelete
+    ? `<div class="modal-overlay" id="deleteModal" onclick="if(event.target===this)closeDeleteModal()" aria-hidden="true">
+    <div class="modal" role="dialog" aria-labelledby="deleteModalTitle" aria-modal="true">
+      <h2 id="deleteModalTitle">Delete this file?</h2>
+      <p class="modal-path">${escapeHtml(opts.deletePath)}</p>
+      <p class="modal-warning">This cannot be undone. The file will be removed permanently.</p>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+        <button class="btn btn-danger" id="deleteConfirm" onclick="confirmDelete()">Delete</button>
+      </div>
+    </div>
+  </div>
+  <script>
+    const DELETE_PATH = ${JSON.stringify(opts.deletePath)};
+    const DELETE_REDIRECT = ${JSON.stringify(opts.deleteRedirect || "/")};
+    function openDeleteModal() {
+      const m = document.getElementById("deleteModal");
+      m.classList.add("open");
+      m.setAttribute("aria-hidden", "false");
+      document.addEventListener("keydown", escClose);
+    }
+    function closeDeleteModal() {
+      const m = document.getElementById("deleteModal");
+      m.classList.remove("open");
+      m.setAttribute("aria-hidden", "true");
+      document.removeEventListener("keydown", escClose);
+    }
+    function escClose(e) { if (e.key === "Escape") closeDeleteModal(); }
+    async function confirmDelete() {
+      const btn = document.getElementById("deleteConfirm");
+      btn.disabled = true;
+      btn.textContent = "Deleting...";
+      try {
+        const r = await fetch("/api/delete", {
+          method: "DELETE",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ path: DELETE_PATH }),
+        });
+        if (!r.ok) {
+          const j = await r.json().catch(() => ({}));
+          throw new Error(j.error || ("HTTP " + r.status));
+        }
+        window.location.href = DELETE_REDIRECT;
+      } catch (e) {
+        btn.disabled = false;
+        btn.textContent = "Delete";
+        alert("Delete failed: " + e.message);
+      }
+    }
+  </script>`
+    : "";
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -87,11 +144,12 @@ function pageHtml(title, bodyContent, pathSegments, rawUrl) {
   <script>${THEME_JS}</script>
 </head>
 <body>
-  <header class="header"><nav class="header-inner">${headerLinks}<span class="header-right">${rawLink}<button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme"></button></span></nav></header>
+  <header class="header"><nav class="header-inner">${headerLinks}<span class="header-right">${deleteBtn}${rawLink}<button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme"></button></span></nav></header>
   <div class="container">
     ${bodyContent}
   </div>
   <footer class="footer">shared via <a href="https://github.com/a2u/sharemd"><strong>sharemd</strong></a> ❤️</footer>
+  ${deleteModal}
 </body>
 </html>`;
 }
@@ -336,12 +394,84 @@ body {
   border-radius: 4px;
 }
 .raw-link:hover { color: var(--fg) !important; border-color: var(--muted); }
+.delete-link {
+  font-size: 0.75rem;
+  color: var(--muted);
+  background: none;
+  border: 1px solid var(--border);
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1.4;
+}
+.delete-link:hover { color: #cf222e; border-color: #cf222e; }
+[data-theme="dark"] .delete-link:hover,
+:root:not([data-theme]) .delete-link:hover { color: #ff7b72; border-color: #ff7b72; }
 .theme-toggle {
   background: none; border: none; cursor: pointer;
   font-size: 1rem; padding: 0.2rem;
   line-height: 1;
 }
 .theme-toggle::after { content: var(--toggle-icon); }
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: none;
+  align-items: center; justify-content: center;
+  z-index: 100;
+  padding: 1rem;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  max-width: 420px; width: 100%;
+  padding: 1.5rem;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+}
+.modal h2 {
+  font-size: 1.1rem; font-weight: 600;
+  margin-bottom: 0.75rem;
+  color: var(--fg);
+}
+.modal-path {
+  font-family: "SFMono-Regular", Consolas, Menlo, monospace;
+  font-size: 0.85rem;
+  color: var(--fg);
+  background: var(--code-bg);
+  padding: 0.4rem 0.6rem;
+  border-radius: 4px;
+  margin-bottom: 0.75rem;
+  word-break: break-all;
+}
+.modal-warning {
+  font-size: 0.875rem;
+  color: var(--muted);
+  margin-bottom: 1.25rem;
+}
+.modal-actions {
+  display: flex; justify-content: flex-end; gap: 0.5rem;
+}
+.btn {
+  font-family: inherit;
+  font-size: 0.875rem;
+  padding: 0.4rem 0.9rem;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  color: var(--fg);
+}
+.btn:hover { background: var(--card-hover); }
+.btn-danger {
+  background: #cf222e;
+  border-color: #cf222e;
+  color: #fff;
+}
+.btn-danger:hover { background: #a40e26; border-color: #a40e26; }
+.btn-danger:disabled { opacity: 0.6; cursor: wait; }
 .container {
   max-width: 860px;
   margin: 0 auto;
@@ -564,16 +694,26 @@ function findUserByToken(token) {
 
 function auth(req, res, next) {
   const header = req.headers.authorization;
-  if (!header || !header.startsWith("Bearer ")) {
-    return res.status(401).json({ error: "Invalid or missing token" });
+  if (header && header.startsWith("Bearer ")) {
+    const user = findUserByToken(header.slice(7));
+    if (user) {
+      req.user = user;
+      return next();
+    }
   }
-  const token = header.slice(7);
-  const user = findUserByToken(token);
-  if (!user) {
-    return res.status(401).json({ error: "Invalid or missing token" });
+
+  // Session cookie fallback (SameSite=Lax, so no CSRF surface from cross-site POST/DELETE)
+  const session = getSession(req);
+  if (session) {
+    const users = loadUsers();
+    const user = users.find((u) => u.id === session.userId);
+    if (user) {
+      req.user = user;
+      return next();
+    }
   }
-  req.user = user;
-  next();
+
+  return res.status(401).json({ error: "Invalid or missing token" });
 }
 
 function send404(res, message) {
@@ -658,12 +798,18 @@ function handlePath(req, res, userId, filePath) {
   const rendered = md.render(content);
   const rawUrl = `${prefix}/${filePath}?raw`;
 
+  const session = getSession(req);
+  const canDelete = session && Number(session.userId) === Number(userId);
+  const parent = path.dirname(filePath);
+  const deleteRedirect = parent === "." ? (prefix || "/") : `${prefix}/${parent}/`;
+
   res.send(
     pageHtml(
       path.basename(filePath),
       `<article class="markdown-body">${rendered}</article>`,
       buildSegments(userId, filePath),
-      rawUrl
+      rawUrl,
+      canDelete ? { canDelete: true, deletePath: filePath, deleteRedirect } : null
     )
   );
 }
@@ -1055,4 +1201,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { createServer, DATA_DIR, SUPERADMIN_ID, isEmailAllowed };
+module.exports = { createServer, DATA_DIR, SUPERADMIN_ID, isEmailAllowed, createSession };
