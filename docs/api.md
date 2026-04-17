@@ -189,12 +189,11 @@ Paginated + searchable file list for the logged-in user. Used by the `/panel` UI
   "total": 2,
   "page": 1,
   "totalPages": 1,
-  "limit": 50,
-  "userPrefix": ""
+  "limit": 50
 }
 ```
 
-Files are always sorted by `mtime` descending (newest first). `userPrefix` is `""` for superadmin and `/<userId>` for other users — use it to build hrefs like `userPrefix + "/" + path`.
+Files are always sorted by `mtime` descending (newest first). The `/panel` UI knows its own user prefix from the initial SSR render, so the response carries only the paginated slice.
 
 **Response (401):**
 
