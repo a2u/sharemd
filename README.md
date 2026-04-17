@@ -18,6 +18,120 @@ docker compose up -d
 
 Server runs at `http://localhost:3737`.
 
+## Install on a VPS (Docker) — step by step
+
+Tested on fresh Ubuntu 22.04/24.04. Copy-paste the commands one block at a time.
+
+### 1. SSH into your server
+
+```bash
+ssh root@YOUR_SERVER_IP
+```
+
+### 2. Install Docker
+
+```bash
+curl -fsSL https://get.docker.com | sh
+```
+
+### 3. Clone the repo
+
+```bash
+git clone https://github.com/vrudnykh/sharemd.git
+cd sharemd
+```
+
+### 4. Create the `.env` file
+
+```bash
+cp .env.example .env
+nano .env
+```
+
+Set at minimum:
+
+```
+BASE_URL=https://share.yourdomain.com
+SITE_DOMAIN=share.yourdomain.com
+```
+
+Save with `Ctrl+O`, `Enter`, then `Ctrl+X`.
+
+Google OAuth is optional — leave `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` empty if you don't need web login (you can still upload via API using a token in `data/users.json`).
+
+### 5. Start the container
+
+```bash
+docker compose up -d
+```
+
+Check it's running:
+
+```bash
+curl http://localhost:3737/health
+# → {"status":"ok","uptime":...}
+```
+
+### 6. Point your domain at the server
+
+In your DNS provider, create an `A` record:
+`share.yourdomain.com` → `YOUR_SERVER_IP`
+
+### 7. Add HTTPS with nginx + Let's Encrypt (if you use nginx)
+
+Skip this step if you're using a different reverse proxy (Caddy, Traefik, etc.) or already have one set up.
+
+```bash
+apt update && apt install -y nginx certbot python3-certbot-nginx
+```
+
+Create `/etc/nginx/sites-available/sharemd`:
+
+```bash
+nano /etc/nginx/sites-available/sharemd
+```
+
+Paste:
+
+```nginx
+server {
+    server_name share.yourdomain.com;
+    client_max_body_size 50M;
+
+    location / {
+        proxy_pass http://127.0.0.1:3737;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+Enable it and issue a cert:
+
+```bash
+ln -s /etc/nginx/sites-available/sharemd /etc/nginx/sites-enabled/
+nginx -t && systemctl reload nginx
+certbot --nginx -d share.yourdomain.com
+```
+
+Done. Open `https://share.yourdomain.com` in a browser.
+
+### Updating later
+
+```bash
+cd sharemd
+git pull
+docker compose up -d --build
+```
+
+### Viewing logs
+
+```bash
+docker compose logs -f
+```
+
 ## Share files
 
 ```bash
