@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- Configuration ---
 SHAREMD_URL="${SHAREMD_URL:-http://localhost:3737}"
-SHAREMD_TOKEN="${SHAREMD_TOKEN:-shmd_tk_9f4a2b7e1c8d3056}"
+SHAREMD_TOKEN="${SHAREMD_TOKEN:-}"
 
 # --- Helpers ---
 
@@ -19,7 +19,10 @@ Share markdown files and get a public URL.
 
 Environment variables:
   SHAREMD_URL    Server URL (default: http://localhost:3737)
-  SHAREMD_TOKEN  Auth token
+  SHAREMD_TOKEN  Auth token (REQUIRED — no default)
+
+Get your token from \$SHAREMD_URL/panel after Google login, or run the
+one-liner installer shown there which writes ~/.sharemdrc for you.
 EOF
   exit 1
 }
@@ -28,6 +31,28 @@ die() { echo "error: $*" >&2; exit 1; }
 
 command -v curl >/dev/null || die "curl is required"
 command -v jq >/dev/null || die "jq is required (brew install jq)"
+
+if [ -z "$SHAREMD_TOKEN" ]; then
+  cat >&2 <<EOF
+error: SHAREMD_TOKEN is not set.
+
+This used to fall back to a hardcoded token, which uploaded as a different
+user than intended. That fallback has been removed — you must configure a
+token explicitly.
+
+Fix it one of these ways:
+
+  1. Re-source your shell config so ~/.sharemdrc is loaded:
+       source ~/.sharemdrc
+     (Or open a new terminal.)
+
+  2. Export the token for this session:
+       export SHAREMD_TOKEN=shmd_tk_...
+
+  3. Re-run the installer from ${SHAREMD_URL}/panel to rewrite ~/.sharemdrc.
+EOF
+  exit 1
+fi
 
 # Make an API call. Sets RESP_BODY and RESP_CODE.
 api_call() {

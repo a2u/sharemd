@@ -91,13 +91,15 @@ Timeout is 10 seconds.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `SHAREMD_URL` | `http://localhost:3737` | Server base URL |
-| `SHAREMD_TOKEN` | `shmd_tk_9f4a2b7e1c8d3056` | Auth token |
+| `SHAREMD_TOKEN` | — (required) | Auth token. The CLI refuses to run without it |
+
+The CLI does **not** ship with a default token. If `SHAREMD_TOKEN` is unset, `sharemd` aborts with an error pointing you at `/panel`. This prevents silent uploads under the wrong identity when a shell session hasn't sourced `~/.sharemdrc` yet.
 
 Example with a remote server:
 
 ```bash
 export SHAREMD_URL=https://share.example.com
-export SHAREMD_TOKEN=your-token-here
+export SHAREMD_TOKEN=shmd_tk_your-token-here
 sharemd notes.md
 ```
 
