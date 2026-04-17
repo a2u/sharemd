@@ -12,6 +12,8 @@ const TOKEN = "shmd_tk_9f4a2b7e1c8d3056";
 process.env.PORT = TEST_PORT;
 process.env.DATA_DIR = TEST_DATA;
 process.env.BASE_URL = `http://localhost:${TEST_PORT}`;
+process.env.ALLOWED_EMAILS = "";
+process.env.ADMIN_EMAIL = "";
 
 const { createServer, SUPERADMIN_ID, isEmailAllowed } = require("../server");
 

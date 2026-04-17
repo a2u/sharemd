@@ -107,7 +107,7 @@ function landingHtml() {
 
 function deniedHtml() {
   const adminContact = ADMIN_EMAIL
-    ? `Contact the admin to request access: <strong><a href="mailto:${escapeHtml(ADMIN_EMAIL)}">${escapeHtml(ADMIN_EMAIL)}</a></strong>`
+    ? `Contact the admin to request access: <a href="mailto:${escapeHtml(ADMIN_EMAIL)}">${escapeHtml(ADMIN_EMAIL)}</a>`
     : `Contact the administrator of this instance to request access.`;
   return DENIED_TEMPLATE
     .replace(/\{\{SITE_DOMAIN\}\}/g, escapeHtml(SITE_DOMAIN))
