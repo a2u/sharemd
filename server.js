@@ -7,6 +7,7 @@ const https = require("https");
 const MarkdownIt = require("markdown-it");
 const hljs = require("highlight.js");
 const anchor = require("markdown-it-anchor");
+const { version: VERSION } = require("./package.json");
 
 // --- Config ---
 
@@ -84,7 +85,9 @@ function pageHtml(title, bodyContent, pathSegments, rawUrl) {
 const LANDING_TEMPLATE = fs.readFileSync(path.join(__dirname, "index.html"), "utf-8");
 
 function landingHtml() {
-  return LANDING_TEMPLATE.replace(/\{\{SITE_DOMAIN\}\}/g, escapeHtml(SITE_DOMAIN));
+  return LANDING_TEMPLATE
+    .replace(/\{\{SITE_DOMAIN\}\}/g, escapeHtml(SITE_DOMAIN))
+    .replace(/\{\{VERSION\}\}/g, escapeHtml(VERSION));
 }
 
 function panelHtml(email, token, usedBytes, limitMb) {
@@ -885,7 +888,7 @@ app.get("/panel", (req, res) => {
 
 // Health check
 app.get("/health", (req, res) => {
-  res.json({ status: "ok", uptime: Math.floor(process.uptime()) });
+  res.json({ status: "ok", uptime: Math.floor(process.uptime()), version: VERSION });
 });
 
 // --- Public routes ---

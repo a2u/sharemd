@@ -1,6 +1,6 @@
 {
   "name": "sharemd",
-  "version": "1.0.0",
+  "version": "0.9.0",
   "description": "Markdown file sharing service",
   "main": "server.js",
   "bin": {
