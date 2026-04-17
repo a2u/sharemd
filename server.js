@@ -246,7 +246,7 @@ function panelHtml(email, token, usedBytes, limitMb) {
     </div>
     <div class="field">
       <span class="label">install cli</span>
-      <code class="snippet">curl -fsSL ${escapeHtml(BASE_URL)}/install?token=${escapeHtml(token)} | bash</code>
+      <code class="snippet">curl -fsSL "${escapeHtml(BASE_URL)}/install?token=${escapeHtml(token)}" | bash</code>
       <div class="hint">Paste in your terminal. Requires <span class="value">curl</span> and <span class="value">jq</span>. Then: <span class="value">sharemd file.md</span></div>
     </div>
     <div class="nav">

@@ -7,7 +7,7 @@
 Log in to your instance, open `/panel`, and copy the install command. It looks like:
 
 ```bash
-curl -fsSL https://share.example.com/install?token=shmd_tk_xxxx | bash
+curl -fsSL "https://share.example.com/install?token=shmd_tk_xxxx" | bash
 ```
 
 This will:
@@ -23,7 +23,7 @@ After that, open a new terminal (or `source ~/.sharemdrc`) and run `sharemd file
 Set `SHAREMD_INSTALL_DIR` before running if you want a different location:
 
 ```bash
-curl -fsSL https://share.example.com/install?token=... | SHAREMD_INSTALL_DIR=$HOME/bin bash
+curl -fsSL "https://share.example.com/install?token=..." | SHAREMD_INSTALL_DIR=$HOME/bin bash
 ```
 
 ### Manual
