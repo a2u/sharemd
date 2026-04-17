@@ -235,6 +235,7 @@ function panelHtml(email, token, usedBytes, limitMb) {
   const limitBytes = limitMb * 1024 * 1024;
   const pct = limitBytes > 0 ? Math.min(100, (usedBytes / limitBytes) * 100).toFixed(1) : 0;
   const barWidth = Math.min(100, Math.round(pct));
+  const installCmd = `curl -fsSL "${BASE_URL}/install?token=${token}" | bash`;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -254,20 +255,39 @@ function panelHtml(email, token, usedBytes, limitMb) {
       align-items: center;
       justify-content: center;
     }
-    .terminal { max-width: 640px; padding: 2rem; }
+    .terminal { max-width: 640px; padding: 2rem; width: 100%; }
     .title { color: #fff; font-size: 1rem; margin-bottom: 2rem; }
     .field { margin-bottom: 1.2rem; font-size: 0.85rem; line-height: 1.6; }
     .label { color: #666; }
     .value { color: #fff; }
-    .token { color: #fff; font-size: 0.75rem; word-break: break-all; }
     .bar-bg {
       margin-top: 0.4rem;
       height: 6px; background: #222; border-radius: 3px; overflow: hidden;
     }
     .bar-fill { height: 100%; background: #aaa; border-radius: 3px; }
+    .reveal-btn {
+      display: inline-flex; align-items: baseline; gap: 0.6rem;
+      background: none; border: none; cursor: pointer;
+      padding: 0; margin: 0;
+      font-family: inherit; font-size: 0.85rem; line-height: 1.6;
+      color: #aaa;
+    }
+    .reveal-btn:hover { color: #fff; }
+    .reveal-btn .chev { color: #666; font-size: 0.7rem; }
+    .reveal-btn[aria-expanded="true"] .chev { transform: rotate(90deg); display: inline-block; }
+    .copy-status {
+      font-size: 0.75rem; color: #666;
+      min-height: 1em;
+      transition: color 0.15s;
+    }
+    .copy-status.ok { color: #7ee787; }
+    .copy-status.warn { color: #d97757; }
+    .install-body {
+      margin-top: 0.6rem;
+    }
+    .install-body[hidden] { display: none; }
     .snippet {
       display: block;
-      margin-top: 0.4rem;
       padding: 0.6rem 0.8rem;
       background: #141414;
       border: 1px solid #222;
@@ -279,6 +299,7 @@ function panelHtml(email, token, usedBytes, limitMb) {
       word-break: break-all;
       white-space: pre-wrap;
       user-select: all;
+      cursor: text;
     }
     .hint { color: #666; font-size: 0.75rem; margin-top: 0.4rem; }
     .nav { margin-top: 2rem; font-size: 0.8rem; display: flex; gap: 1.5rem; }
@@ -294,24 +315,74 @@ function panelHtml(email, token, usedBytes, limitMb) {
       <span class="value">${escapeHtml(email)}</span>
     </div>
     <div class="field">
-      <span class="label">token</span><br>
-      <span class="token">${escapeHtml(token)}</span>
-    </div>
-    <div class="field">
       <span class="label">storage</span><br>
       <span class="value">${formatBytes(usedBytes)}</span> <span class="label">/ ${limitMb} MB (${pct}%)</span>
       <div class="bar-bg"><div class="bar-fill" style="width:${barWidth}%"></div></div>
     </div>
     <div class="field">
-      <span class="label">install cli</span>
-      <code class="snippet">curl -fsSL "${escapeHtml(BASE_URL)}/install?token=${escapeHtml(token)}" | bash</code>
-      <div class="hint">Paste in your terminal. Requires <span class="value">curl</span> and <span class="value">jq</span>. Then: <span class="value">sharemd file.md</span></div>
+      <button class="reveal-btn" type="button" onclick="toggleInstall()" aria-expanded="false" aria-controls="installBody">
+        <span><span class="chev">&gt;</span> install cli</span>
+        <span class="copy-status" id="copyStatus"></span>
+      </button>
+      <div class="install-body" id="installBody" hidden>
+        <code class="snippet" id="installSnippet">${escapeHtml(installCmd)}</code>
+        <div class="hint">Run once on any machine. Requires <span class="value">curl</span> and <span class="value">jq</span>. After install: <span class="value">sharemd file.md</span></div>
+      </div>
     </div>
     <div class="nav">
       <a href="/">/home</a>
       <a href="/logout">/logout</a>
     </div>
   </div>
+  <script>
+    const INSTALL_CMD = ${JSON.stringify(installCmd)};
+    let statusTimer = null;
+    function setStatus(text, kind) {
+      const el = document.getElementById("copyStatus");
+      el.textContent = text;
+      el.className = "copy-status" + (kind ? " " + kind : "");
+      if (statusTimer) clearTimeout(statusTimer);
+      if (text) {
+        statusTimer = setTimeout(() => { el.textContent = ""; el.className = "copy-status"; }, 2500);
+      }
+    }
+    async function copyCmd() {
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(INSTALL_CMD);
+          setStatus("copied", "ok");
+          return;
+        }
+      } catch (_) {}
+      // Fallback for non-HTTPS or blocked clipboard
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = INSTALL_CMD;
+        ta.style.position = "fixed"; ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        const ok = document.execCommand("copy");
+        document.body.removeChild(ta);
+        setStatus(ok ? "copied" : "select and copy manually", ok ? "ok" : "warn");
+      } catch (_) {
+        setStatus("select and copy manually", "warn");
+      }
+    }
+    function toggleInstall() {
+      const body = document.getElementById("installBody");
+      const btn = document.querySelector(".reveal-btn");
+      const open = !body.hidden;
+      if (open) {
+        body.hidden = true;
+        btn.setAttribute("aria-expanded", "false");
+        setStatus("");
+        return;
+      }
+      body.hidden = false;
+      btn.setAttribute("aria-expanded", "true");
+      copyCmd();
+    }
+  </script>
 </body>
 </html>`;
 }

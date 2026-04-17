@@ -380,6 +380,18 @@ describe("login/panel/logout", () => {
     assert.ok(res.headers.location.includes("accounts.google.com"));
   });
 
+  it("/panel renders with install toggle but no standalone token field", async () => {
+    const sid = createSession({ id: SUPERADMIN_ID, email: "test@test.com" });
+    const res = await req("GET", "/panel", null, false, { cookie: `sid=${sid}` });
+    assert.equal(res.status, 200);
+    assert.match(res.html, /toggleInstall/);
+    assert.match(res.html, /install cli/);
+    // Token is inside the install command, never as its own field
+    assert.ok(!/>\s*token\s*<\/span>/.test(res.html), "no standalone token label");
+    // Install body is hidden by default
+    assert.match(res.html, /id="installBody"[^>]*hidden/);
+  });
+
   it("/panel redirects to /login when not authenticated", async () => {
     const res = await req("GET", "/panel", null, false);
     assert.equal(res.status, 302);
