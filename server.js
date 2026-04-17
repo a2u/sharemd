@@ -145,7 +145,7 @@ function pageHtml(title, bodyContent, pathSegments, rawUrl, opts) {
   <script>${THEME_JS}</script>
 </head>
 <body>
-  <header class="header"><nav class="header-inner">${headerLinks}<span class="header-right">${deleteBtn}${rawLink}<button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme"></button></span></nav></header>
+  <header class="header"><nav class="header-inner">${headerLinks}<span class="header-right">${deleteBtn}${rawLink}<button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1A7 7 0 0 1 8 15Z" fill="currentColor"/></svg></button></span></nav></header>
   <div class="container">
     ${bodyContent}
   </div>
@@ -523,11 +523,12 @@ function panelHtml(email, token, usedBytes, limitMb, userId, initial) {
             </svg>
           </button>
         </div>
-        <div class="hint">Run once on any machine. Requires <span class="value">curl</span> and <span class="value">jq</span>. After install: <span class="value">sharemd file.md</span></div>
+        <div class="hint">Run once on any machine. Requires <span class="value">curl</span> and <span class="value">jq</span>.<br>After install: <span class="value">sharemd file.md</span> or <span class="value">sharemd docs/</span></div>
       </div>
     </div>
     <div class="nav">
       <a href="/">/home</a>
+      <a href="/ai-skill">/ai-skill</a>
       <a href="/logout">/logout</a>
     </div>
   </div>
@@ -595,7 +596,6 @@ function panelHtml(email, token, usedBytes, limitMb, userId, initial) {
       }
       body.hidden = false;
       btn.setAttribute("aria-expanded", "true");
-      copyCmd();
     }
     document.addEventListener("DOMContentLoaded", function () {
       const copyBtn = document.getElementById("copyBtn");
@@ -696,7 +696,6 @@ const CSS = `
   --card-bg: #ffffff;
   --card-hover: #f6f8fa;
   --header-bg: rgba(255,255,255,0.85);
-  --toggle-icon: "☀️";
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
@@ -709,7 +708,6 @@ const CSS = `
     --card-bg: #161b22;
     --card-hover: #1c2129;
     --header-bg: rgba(13,17,23,0.85);
-    --toggle-icon: "🌙";
   }
 }
 [data-theme="dark"] {
@@ -722,9 +720,7 @@ const CSS = `
   --card-bg: #161b22;
   --card-hover: #1c2129;
   --header-bg: rgba(13,17,23,0.85);
-  --toggle-icon: "🌙";
 }
-[data-theme="light"] { --toggle-icon: "☀️"; }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
@@ -779,10 +775,13 @@ body {
 :root:not([data-theme]) .delete-link:hover { color: #ff7b72; border-color: #ff7b72; }
 .theme-toggle {
   background: none; border: none; cursor: pointer;
-  font-size: 1rem; padding: 0.2rem;
-  line-height: 1;
+  padding: 0.2rem;
+  line-height: 0;
+  color: var(--muted);
+  display: inline-flex; align-items: center;
 }
-.theme-toggle::after { content: var(--toggle-icon); }
+.theme-toggle:hover { color: var(--fg); }
+.theme-toggle svg { display: block; }
 .modal-overlay {
   position: fixed; inset: 0;
   background: rgba(0, 0, 0, 0.55);

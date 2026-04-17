@@ -118,7 +118,7 @@ Terminal-styled page (matches the landing page aesthetic) showing:
 - **files (N)** — scrollable list of the user's `.md` files with path, size and click-through link. Sorted by mtime descending (newest first). First 50 rendered inline by SSR
 - **search input** — live client-side filter; debounced 180 ms, calls `/api/panel/files?q=…`, replaces the list without a page reload
 - **pagination** — hidden when total ≤ limit. Otherwise shows `page / totalPages` with prev/next buttons that re-fetch via the same API endpoint
-- **install cli** — click-to-reveal toggle. When opened, the `curl … | bash` one-liner (with the user's token pre-filled) is shown AND auto-copied to the clipboard (with an `execCommand` textarea fallback for non-HTTPS contexts). Token is never shown as a standalone field
+- **install cli** — click-to-reveal toggle. When opened, the `curl … | bash` one-liner (with the user's token pre-filled) is shown next to a copy icon. Clicking the icon copies to clipboard (with an `execCommand` textarea fallback for non-HTTPS contexts). Token is never shown as a standalone field
 
 The client uses a monotonically increasing `inflight` counter to discard stale responses (important for fast-typed search input).
 
