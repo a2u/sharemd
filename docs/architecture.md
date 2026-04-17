@@ -15,6 +15,7 @@ Client (browser / CLI / agent)
     ├── Installer endpoints              ← bash one-liner for CLI
     │   ├── GET /install?token=<tok>
     │   └── GET /install/cli
+    ├── AI skill page (/ai-skill)        ← Claude Code plugin install docs
     ├── Auth flow (Google OAuth)
     │   ├── GET /login
     │   ├── GET /login/denied            ← ALLOWED_EMAILS reject page
@@ -132,6 +133,29 @@ The client uses a monotonically increasing `inflight` counter to discard stale r
 `GET /install/cli` serves the raw `bin/sharemd` bash source.
 
 The token is validated against `/^[A-Za-z0-9_]{8,128}$/` before being interpolated into the script — any malformed or missing token produces a script that exits with an error, so shell-injection attempts cannot escape the quoted variable.
+
+## AI Skill Distribution
+
+The repo doubles as a Claude Code plugin marketplace. A single skill — `sharemd` — wraps the CLI so agents can share markdown files in response to natural-language prompts ("share this as a page").
+
+```
+.claude-plugin/
+  marketplace.json              ← catalog (one plugin: "sharemd")
+plugins/sharemd/
+  .claude-plugin/plugin.json    ← plugin manifest (version, repo, license)
+  skills/sharemd/SKILL.md       ← YAML frontmatter + agent instructions
+```
+
+Users install with two slash commands inside Claude Code:
+
+```
+/plugin marketplace add a2u/sharemd
+/plugin install sharemd@sharemd
+```
+
+The marketplace is the GitHub repo itself — `/plugin marketplace update sharemd` pulls new versions. The skill has no token baked in; it calls the `sharemd` CLI, which reads auth from `~/.sharemdrc`. That means `SKILL.md` can be shared freely without leaking credentials.
+
+`GET /ai-skill` serves an HTML page documenting the install + usage flow. `GET /ai-skill?raw` returns the `SKILL.md` body as `text/plain` for agents that don't use the marketplace (Cursor, Codex, manual `~/.claude/skills/` drops, etc.).
 
 ## Delete Flow
 

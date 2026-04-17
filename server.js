@@ -158,6 +158,10 @@ function pageHtml(title, bodyContent, pathSegments, rawUrl, opts) {
 const LANDING_TEMPLATE = fs.readFileSync(path.join(__dirname, "index.html"), "utf-8");
 const DENIED_TEMPLATE = fs.readFileSync(path.join(__dirname, "denied.html"), "utf-8");
 const CLI_SCRIPT = fs.readFileSync(path.join(__dirname, "bin", "sharemd"), "utf-8");
+const SKILL_MD = fs.readFileSync(
+  path.join(__dirname, "plugins", "sharemd", "skills", "sharemd", "SKILL.md"),
+  "utf-8"
+);
 
 function landingHtml() {
   return LANDING_TEMPLATE
@@ -221,6 +225,48 @@ echo ""
 echo "Then try:"
 echo "  sharemd yourfile.md"
 `;
+}
+
+function aiSkillHtml() {
+  const marketplaceName = "sharemd";
+  const pluginName = "sharemd";
+  const repo = "a2u/sharemd";
+  const body = `
+<article class="markdown-body">
+  <h1 id="ai-skill">AI Skill for Claude Code</h1>
+  <p class="lead">Teach Claude Code (or any agent that understands the <code>SKILL.md</code> format) to share your markdown files as rendered web pages. After installing the skill, just say <em>"share this as a page"</em> and the agent runs <code>sharemd</code> for you.</p>
+
+  <h2 id="install-claude-code">Install in Claude Code</h2>
+  <p>Inside Claude Code, run these two slash commands:</p>
+  <pre><code>/plugin marketplace add ${escapeHtml(repo)}
+/plugin install ${escapeHtml(pluginName)}@${escapeHtml(marketplaceName)}</code></pre>
+  <p>Claude Code clones the marketplace from GitHub, installs the <code>${escapeHtml(pluginName)}</code> plugin, and registers the skill. You can verify with <code>/plugin</code> — the skill appears under installed plugins.</p>
+
+  <h2 id="prerequisite">Prerequisite: the CLI</h2>
+  <p>The skill calls the <code>sharemd</code> terminal command. If you haven't installed it, open <a href="/panel">/panel</a> and copy the one-liner install command — it drops <code>sharemd</code> on your <code>PATH</code> and writes your token to <code>~/.sharemdrc</code>. The skill does not work without it.</p>
+
+  <h2 id="how-to-use">How to use</h2>
+  <p>After install, talk to Claude Code naturally. It auto-invokes the skill when your prompt mentions sharing, publishing, or sending markdown content:</p>
+  <ul>
+    <li>"Share this README as a page" → <code>sharemd README.md</code> → prints the URL</li>
+    <li>"Give me a link to the docs folder" → <code>sharemd docs/</code> → uploads the whole tree</li>
+    <li>"Publish the report I just wrote" → Claude finds the file and uploads with <code>sharemd &lt;file&gt; -f</code></li>
+  </ul>
+
+  <h2 id="other-agents">Other agents / manual install</h2>
+  <p>If you don't use Claude Code's plugin system (or you're on another agent that reads <code>SKILL.md</code>), grab the file directly:</p>
+  <pre><code>mkdir -p ~/.claude/skills/sharemd
+curl -fsSL ${escapeHtml(BASE_URL)}/ai-skill?raw &gt; ~/.claude/skills/sharemd/SKILL.md</code></pre>
+  <p>For Cursor, Codex, or anything using <code>AGENTS.md</code> / <code>.cursorrules</code>, paste the <a href="/ai-skill?raw">raw skill content</a> into your agent's instruction file.</p>
+
+  <h2 id="how-it-works">How it works</h2>
+  <p>The skill is a <code>SKILL.md</code> file with YAML frontmatter. The <code>description</code> tells the agent <em>when</em> to use the skill; the body tells it <em>how</em>. In this case, "how" is: run <code>sharemd file.md</code> or <code>sharemd dir/</code> from the shell, capture the URL from stdout, pass <code>-f</code> when re-uploading, fall back to the HTTP API if the CLI is missing.</p>
+  <p>The skill never embeds a token — auth lives in <code>~/.sharemdrc</code> (sourced by your shell) and is read by the CLI. That means you can freely share the skill file without leaking credentials.</p>
+
+  <h2 id="source">Source</h2>
+  <p>Marketplace catalog: <code>.claude-plugin/marketplace.json</code>. Plugin: <code>plugins/sharemd/</code>. Skill: <code>plugins/sharemd/skills/sharemd/SKILL.md</code>. All in the <a href="https://github.com/${escapeHtml(repo)}">${escapeHtml(repo)}</a> repo — <code>/plugin marketplace update ${escapeHtml(marketplaceName)}</code> pulls new versions.</p>
+</article>`;
+  return pageHtml("AI Skill", body, [{ label: "ai-skill" }], null, null);
 }
 
 function deniedHtml() {
@@ -1545,6 +1591,16 @@ app.get("/install", (req, res) => {
 app.get("/install/cli", (req, res) => {
   res.set("Content-Type", "text/plain; charset=utf-8");
   res.send(CLI_SCRIPT);
+});
+
+// AI Skill page — install + usage instructions for Claude Code
+// ?raw → serve SKILL.md as text/plain (for manual install fallback)
+app.get("/ai-skill", (req, res) => {
+  if (req.query.raw !== undefined) {
+    res.set("Content-Type", "text/plain; charset=utf-8").send(SKILL_MD);
+    return;
+  }
+  res.send(aiSkillHtml());
 });
 
 // --- Public routes ---

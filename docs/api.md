@@ -224,6 +224,8 @@ These routes serve content to anyone with the URL.
 | `GET /login/denied` | 403 page for emails not in `ALLOWED_EMAILS` |
 | `GET /panel` | Authenticated user panel (storage, file list with search/pagination, install one-liner). Redirects to `/login` if no session |
 | `GET /logout` | Clears session cookie, redirects to `/` |
+| `GET /ai-skill` | HTML page with Claude Code plugin-marketplace install + usage instructions |
+| `GET /ai-skill?raw` | Raw `SKILL.md` content as `text/plain` — for manual install into `~/.claude/skills/` or for agents that don't use the marketplace |
 
 ---
 

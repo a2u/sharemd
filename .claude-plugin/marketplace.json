@@ -1,0 +1,19 @@
+{
+  "name": "sharemd",
+  "owner": {
+    "name": "sharemd"
+  },
+  "metadata": {
+    "description": "Share markdown files as rendered web pages with shareable URLs"
+  },
+  "plugins": [
+    {
+      "name": "sharemd",
+      "source": "./plugins/sharemd",
+      "description": "Share markdown files as rendered web pages. Invokes the sharemd CLI to upload and returns a public URL.",
+      "homepage": "https://github.com/a2u/sharemd",
+      "license": "MIT",
+      "keywords": ["markdown", "share", "publish", "docs"]
+    }
+  ]
+}

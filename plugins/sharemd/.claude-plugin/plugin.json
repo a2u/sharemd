@@ -1,0 +1,12 @@
+{
+  "name": "sharemd",
+  "description": "Share markdown files as rendered web pages. Invokes the sharemd CLI to upload and returns a public URL.",
+  "version": "0.9.0",
+  "author": {
+    "name": "sharemd"
+  },
+  "homepage": "https://github.com/a2u/sharemd",
+  "repository": "https://github.com/a2u/sharemd",
+  "license": "MIT",
+  "keywords": ["markdown", "share", "publish", "docs"]
+}

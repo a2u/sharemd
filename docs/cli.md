@@ -109,3 +109,7 @@ sharemd notes.md
 |------|---------|
 | 0 | Success |
 | 1 | Error (file not found, upload failed, server unreachable) |
+
+## Using from Claude Code
+
+If you use Claude Code, install the `sharemd` skill from the plugin marketplace so the agent can invoke the CLI for you. See the `/ai-skill` page on your instance for the install commands and usage examples.

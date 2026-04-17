@@ -19,14 +19,17 @@ sharemd — a markdown file sharing service. Upload `.md` files via API or CLI, 
 ## Project Structure
 
 ```
-server.js          ← main server (Express, single file)
-index.html         ← landing page template ({{SITE_DOMAIN}} placeholder)
-bin/sharemd        ← CLI (pure bash + jq)
-skill.md           ← AI skill definition
-public/            ← static assets (favicon.ico)
-tests/             ← tests (node:test, port 4747)
-docs/              ← documentation
-data/users.json    ← user registry (tokens, limits) — not in git
+server.js                            ← main server (Express, single file)
+index.html                           ← landing page template ({{SITE_DOMAIN}} placeholder)
+bin/sharemd                          ← CLI (pure bash + jq)
+.claude-plugin/marketplace.json      ← Claude Code plugin marketplace catalog
+plugins/sharemd/                     ← the sharemd plugin (SKILL.md + manifest)
+  .claude-plugin/plugin.json
+  skills/sharemd/SKILL.md            ← AI skill definition (YAML frontmatter + instructions)
+public/                              ← static assets (favicon.ico)
+tests/                               ← tests (node:test, port 4747)
+docs/                                ← documentation
+data/users.json                      ← user registry (tokens, limits) — not in git
 ```
 
 ## Architecture
@@ -72,6 +75,7 @@ All API endpoints determine the target user from the Bearer token (or session co
 - `GET /logout` — clears session, redirects to `/`
 - `GET /install?token=<tok>` — returns a bash installer that drops the CLI to `~/.local/bin/sharemd` and writes `~/.sharemdrc` with URL + token. Token pattern is validated (`[A-Za-z0-9_]{8,128}`); anything else is discarded.
 - `GET /install/cli` — serves the raw `bin/sharemd` content (fetched by the installer).
+- `GET /ai-skill` — HTML page with install + usage instructions for the Claude Code plugin marketplace entry. `?raw` serves `plugins/sharemd/skills/sharemd/SKILL.md` as `text/plain` for manual install.
 
 ## Config
 

@@ -719,3 +719,44 @@ describe("panel files API", () => {
     for (const f of res.body.files) assert.ok(f.path.includes("doc-"));
   });
 });
+
+// --- AI Skill page ---
+
+describe("ai-skill page", () => {
+  it("GET /ai-skill returns HTML with marketplace install commands", async () => {
+    const res = await req("GET", "/ai-skill", null, false);
+    assert.equal(res.status, 200);
+    assert.match(res.headers["content-type"] || "", /text\/html/);
+    // Marketplace install commands are the primary CTA
+    assert.match(res.html, /\/plugin marketplace add a2u\/sharemd/);
+    assert.match(res.html, /\/plugin install sharemd@sharemd/);
+    // Mentions the CLI prerequisite
+    assert.match(res.html, /sharemd/);
+    assert.match(res.html, /\/panel/);
+    // Link to raw SKILL.md for manual install
+    assert.match(res.html, /\/ai-skill\?raw/);
+  });
+
+  it("GET /ai-skill?raw serves SKILL.md as text/plain", async () => {
+    const res = await req("GET", "/ai-skill?raw", null, false);
+    assert.equal(res.status, 200);
+    assert.match(res.headers["content-type"] || "", /text\/plain/);
+    // YAML frontmatter signals this is a real SKILL.md
+    assert.match(res.html, /^---\nname: sharemd\n/);
+    assert.match(res.html, /description:/);
+    // Body instructs the agent to use the CLI
+    assert.match(res.html, /sharemd path\/to\/file\.md/);
+  });
+
+  it("is linked from landing page", async () => {
+    const res = await req("GET", "/", null, false);
+    assert.equal(res.status, 200);
+    assert.match(res.html, /href="\/ai-skill"/);
+  });
+
+  it("is linked from /panel", async () => {
+    const res = await req("GET", "/panel", null, false, { cookie: sidCookie() });
+    assert.equal(res.status, 200);
+    assert.match(res.html, /href="\/ai-skill"/);
+  });
+});
