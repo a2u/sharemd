@@ -1,0 +1,10 @@
+services:
+  sharemd:
+    image: ghcr.io/a2u/sharemd:latest
+    ports:
+      - "${PORT:-3737}:3737"
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - .env
+    restart: unless-stopped

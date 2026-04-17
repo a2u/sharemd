@@ -34,17 +34,20 @@ ssh root@YOUR_SERVER_IP
 curl -fsSL https://get.docker.com | sh
 ```
 
-### 3. Clone the repo
+### 3. Grab the compose file and `.env` template
 
 ```bash
-git clone https://github.com/vrudnykh/sharemd.git
-cd sharemd
+mkdir sharemd && cd sharemd
+curl -O https://raw.githubusercontent.com/a2u/sharemd/main/docker-compose.prod.yml
+curl -o .env https://raw.githubusercontent.com/a2u/sharemd/main/.env.example
+mv docker-compose.prod.yml docker-compose.yml
 ```
 
-### 4. Create the `.env` file
+No `git clone` needed — the prebuilt image is pulled from `ghcr.io/a2u/sharemd`.
+
+### 4. Edit the `.env` file
 
 ```bash
-cp .env.example .env
 nano .env
 ```
 
@@ -122,8 +125,8 @@ Done. Open `https://share.yourdomain.com` in a browser.
 
 ```bash
 cd sharemd
-git pull
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 ```
 
 ### Viewing logs
