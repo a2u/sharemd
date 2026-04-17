@@ -121,7 +121,15 @@ certbot --nginx -d share.yourdomain.com
 
 Done. Open `https://share.yourdomain.com` in a browser.
 
-### Updating later
+### Viewing logs
+
+```bash
+docker compose logs -f
+```
+
+## Updating
+
+New versions are published to `ghcr.io/a2u/sharemd` automatically on every push to `main` and on version tags. To pull the latest and restart:
 
 ```bash
 cd sharemd
@@ -129,10 +137,21 @@ docker compose pull
 docker compose up -d
 ```
 
-### Viewing logs
+Your data in `./data/` is not touched — it's on a host volume, so the container can be recreated without losing files or tokens.
+
+Check which version is running:
 
 ```bash
-docker compose logs -f
+curl http://localhost:3737/health
+# → {"status":"ok","uptime":12,"version":"0.9.0"}
+```
+
+The version number is also shown in the footer of the landing page.
+
+To pin a specific version instead of always tracking `latest`, edit `docker-compose.yml`:
+
+```yaml
+    image: ghcr.io/a2u/sharemd:0.9.0
 ```
 
 ## Share files
